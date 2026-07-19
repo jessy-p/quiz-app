@@ -1,3 +1,5 @@
+"use client";
+
 import type { Question } from "@/types/question";
 import { OptionRow, type OptionVariant } from "./OptionRow";
 

@@ -1,3 +1,5 @@
+"use client";
+
 export type OptionVariant =
   | "rest"
   | "correct-selected"
