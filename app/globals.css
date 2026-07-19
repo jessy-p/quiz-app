@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+  /* Reading Lamp — Study Loop design tokens (see PROJECT_BRIEF.md) */
+  --bg: #17140f;
+  --ink: #f6f1e9;
+  --ink-82: #c2bfb8;
+  --ink-60: #94918b;
+  --ink-58: #908d86;
+  --ink-50: #807c76;
+  --amber: #dd9c42;
+  --amber-text: #f7c383;
+  --oxide: #9a614d;
+  --oxide-text: #cc9684;
+
+  --radius-card: 10px;
+  --content-max-width: 320px;
+  --screen-padding: 24px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-ink: var(--ink);
+  --color-ink-82: var(--ink-82);
+  --color-ink-60: var(--ink-60);
+  --color-ink-58: var(--ink-58);
+  --color-ink-50: var(--ink-50);
+  --color-amber: var(--amber);
+  --color-amber-text: var(--amber-text);
+  --color-oxide: var(--oxide);
+  --color-oxide-text: var(--oxide-text);
+
+  --font-serif: var(--font-source-serif);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-ibm-plex-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
