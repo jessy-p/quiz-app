@@ -1,0 +1,36 @@
+[
+  {
+    "id": "ra-0001",
+    "topic": "rest-api",
+    "mode": "scenario",
+    "prompt": "You're designing an endpoint to let a client update just the email field of a user resource, without touching any other fields. Which approach fits REST conventions best?",
+    "options": [
+      "PUT /users/5 with only { \"email\": \"...\" } in the body",
+      "PATCH /users/5 with { \"email\": \"...\" } in the body",
+      "POST /users/5/update-email with { \"email\": \"...\" } in the body",
+      "GET /users/5?email=... to trigger the update"
+    ],
+    "correctIndex": 1,
+    "explanation": "PATCH is designed for partial updates — sending only the fields that change. PUT is wrong here because it's conventionally a full-resource replacement; a partial body sent via PUT risks the server (or another client reading the spec literally) treating omitted fields as intentionally cleared. The POST option works technically but invents a non-resource-oriented action URL instead of using the standard method REST already provides for this. GET is wrong on a more basic level: GET must be safe (no side effects) — using it to trigger a mutation breaks that guarantee and can cause accidental updates from prefetching, caching, or crawlers.",
+    "references": ["MDN: PATCH", "RFC 5789: PATCH Method for HTTP"],
+    "teachMePrompt": "Explain the REST convention difference between PUT and PATCH for updating a resource, and why using GET to trigger a state change is considered a serious API design mistake.",
+    "doubleCheckPrompt": "Is it accurate that PATCH is the conventional HTTP method for partial resource updates, while PUT implies full replacement, and that GET must remain a safe (non-mutating) method per the HTTP spec? Cite sources."
+  },
+  {
+    "id": "ra-0002",
+    "topic": "rest-api",
+    "mode": "scenario",
+    "prompt": "A client integration keeps double-charging customers because their 'Place Order' POST request times out and their retry logic resubmits it. What's the standard REST/HTTP-level fix, without asking the client to change their retry behavior?",
+    "options": [
+      "Change the endpoint from POST to GET so retries are automatically safe",
+      "Have the server require an Idempotency-Key header from the client, and return the original result if it sees a repeat key instead of creating a new order",
+      "Add a CAPTCHA to slow down retries",
+      "Tell the client to increase their timeout so retries happen less often"
+    ],
+    "correctIndex": 1,
+    "explanation": "An idempotency key (a client-generated unique token sent per logical request) lets the server recognize a retried request as the same operation and return the original result instead of creating a duplicate — this is the standard pattern used by payment APIs like Stripe. Switching to GET is wrong because GET must be safe/non-mutating by spec, and placing an order is inherently a side-effecting write, not a read. A CAPTCHA doesn't address the underlying double-submission problem and adds friction for legitimate use. A longer timeout just delays retries — it doesn't stop a legitimate slow response from still triggering a retry-driven duplicate.",
+    "references": ["stripe.com: Idempotent requests", "MDN: Idempotent (HTTP glossary)"],
+    "teachMePrompt": "Explain how idempotency keys work to prevent duplicate side effects (like double-charging) from client retries, using Stripe's implementation as a reference pattern.",
+    "doubleCheckPrompt": "Is it accurate that idempotency keys are the standard mechanism for making a normally non-idempotent operation like 'place an order' safe to retry, and that this is the pattern payment APIs such as Stripe use? Cite sources."
+  }
+]

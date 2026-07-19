@@ -1,0 +1,31 @@
+[
+  {
+    "id": "bg-0001",
+    "topic": "backend-general",
+    "mode": "quick-fire",
+    "prompt": "What does it mean for an HTTP endpoint to be 'idempotent'?",
+    "options": [
+      "It always returns the same response body regardless of input",
+      "Calling it multiple times with the same input has the same effect as calling it once",
+      "It never modifies server state",
+      "It can only be called once per client session"
+    ],
+    "correctIndex": 1,
+    "explanation": "Idempotency means repeated identical requests produce the same end state as a single request — e.g. PUT /users/5 setting a user's name always results in the same final state, no matter how many times it's called. It doesn't mean no side effects (a PUT still writes data), just that repeating it is safe. GET, PUT, and DELETE are expected to be idempotent; POST generally is not.",
+    "references": ["MDN: Idempotent (HTTP glossary)"],
+    "teachMePrompt": "Explain HTTP idempotency, which methods are expected to be idempotent by spec, and why POST typically isn't.",
+    "doubleCheckPrompt": "Is it accurate that an idempotent HTTP endpoint produces the same end server state whether called once or multiple times with the same input, and that PUT/GET/DELETE are expected to be idempotent while POST isn't? Cite sources."
+  },
+  {
+    "id": "bg-0002",
+    "topic": "backend-general",
+    "mode": "quick-fire",
+    "prompt": "Phil Karlton's famous line about the two hard problems in computer science lists 'cache invalidation' alongside which other one?",
+    "options": ["Distributed consensus", "Naming things", "Race conditions", "Clock synchronization"],
+    "correctIndex": 1,
+    "explanation": "The full (joking) quote is: 'There are only two hard things in Computer Science: cache invalidation and naming things.' It's usually cited to acknowledge how deceptively difficult cache invalidation is in practice — knowing exactly when cached data has gone stale and needs to be refreshed or evicted.",
+    "references": ["Wikiquote: Phil Karlton"],
+    "teachMePrompt": "Explain why cache invalidation is considered a genuinely hard problem in backend systems, with common strategies (TTL, write-through, event-based invalidation) and their tradeoffs.",
+    "doubleCheckPrompt": "Is it accurate that the well-known quote about the two hard problems in computer science pairs 'cache invalidation' with 'naming things,' attributed to Phil Karlton? Cite sources."
+  }
+]

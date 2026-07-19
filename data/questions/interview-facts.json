@@ -1,0 +1,48 @@
+[
+  {
+    "id": "if-0001",
+    "topic": "interview-facts",
+    "mode": "quick-fire",
+    "prompt": "What is the time complexity of binary search on a sorted array of n elements?",
+    "options": ["O(n)", "O(log n)", "O(n log n)", "O(1)"],
+    "correctIndex": 1,
+    "explanation": "Binary search halves the search space on each comparison, so the number of steps needed grows logarithmically with n — O(log n). This requires the array to already be sorted; sorting it first would cost O(n log n).",
+    "references": ["CS fundamentals: Binary search"],
+    "teachMePrompt": "Explain why binary search runs in O(log n) time, and walk through the recurrence relation that gets you there.",
+    "doubleCheckPrompt": "Is it accurate that binary search on a sorted array runs in O(log n) time complexity? Cite sources."
+  },
+  {
+    "id": "if-0002",
+    "topic": "interview-facts",
+    "mode": "quick-fire",
+    "prompt": "What does an HTTP 429 status code mean?",
+    "options": [
+      "Internal Server Error",
+      "Too Many Requests — the client has been rate-limited",
+      "Forbidden — authentication succeeded but access is denied",
+      "Gateway Timeout"
+    ],
+    "correctIndex": 1,
+    "explanation": "429 Too Many Requests indicates the client has sent too many requests in a given time window and is being rate-limited; the response often includes a Retry-After header. 500 is Internal Server Error, 403 is Forbidden, and 504 is Gateway Timeout.",
+    "references": ["MDN: HTTP response status codes"],
+    "teachMePrompt": "Explain what HTTP 429 means, how Retry-After typically works alongside it, and how it differs from 503 Service Unavailable.",
+    "doubleCheckPrompt": "Is it accurate that HTTP status code 429 means 'Too Many Requests' and signals client-side rate limiting? Cite sources."
+  },
+  {
+    "id": "if-0003",
+    "topic": "interview-facts",
+    "mode": "quick-fire",
+    "prompt": "What's the key difference between a process and a thread?",
+    "options": [
+      "A thread has its own isolated memory space; a process shares memory with other processes",
+      "A process has its own memory space; threads within the same process share that memory space",
+      "There is no meaningful difference — the terms are interchangeable",
+      "Threads can run on multiple machines; processes cannot"
+    ],
+    "correctIndex": 1,
+    "explanation": "A process gets its own isolated memory space from the OS. Threads are units of execution within a process, and all threads in that process share the same memory space — which makes inter-thread communication cheaper but introduces risks like race conditions that don't exist between separate processes.",
+    "references": ["OS fundamentals: Processes and Threads"],
+    "teachMePrompt": "Explain the difference between a process and a thread, focusing on memory isolation and why that makes threading more prone to race conditions.",
+    "doubleCheckPrompt": "Is it accurate that threads within the same process share the same memory space, while separate processes have isolated memory? Cite sources."
+  }
+]

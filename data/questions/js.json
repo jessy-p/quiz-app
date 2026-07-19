@@ -1,0 +1,55 @@
+[
+  {
+    "id": "js-0001",
+    "topic": "javascript",
+    "mode": "quick-fire",
+    "prompt": "What does `typeof null` return in JavaScript?",
+    "options": ["'null'", "'undefined'", "'object'", "'number'"],
+    "correctIndex": 2,
+    "explanation": "`typeof null` returns \"object\" — a long-standing language bug preserved for backwards compatibility. `null` is not actually an object; this is purely a quirk of `typeof`.",
+    "references": ["MDN: typeof"],
+    "teachMePrompt": "Explain why `typeof null === 'object'` in JavaScript, and how this quirk affects real-world null checks.",
+    "doubleCheckPrompt": "Is it accurate that `typeof null` returns 'object' in JavaScript, and that this is considered a bug in the language spec? Cite sources."
+  },
+  {
+    "id": "js-0002",
+    "topic": "javascript",
+    "mode": "quick-fire",
+    "prompt": "What is the result of `0.1 + 0.2 === 0.3` in JavaScript?",
+    "options": ["true", "false", "TypeError", "NaN"],
+    "correctIndex": 1,
+    "explanation": "It's false — floating-point numbers use IEEE 754 double precision, so 0.1 + 0.2 actually evaluates to 0.30000000000000004. This isn't JavaScript-specific; it happens in most languages using the same floating-point standard.",
+    "references": ["MDN: Number encoding", "floating-point-gui.de"],
+    "teachMePrompt": "Explain why 0.1 + 0.2 !== 0.3 in JavaScript, in terms of IEEE 754 floating-point representation, and how developers typically work around it.",
+    "doubleCheckPrompt": "Is it accurate that 0.1 + 0.2 !== 0.3 in JavaScript due to IEEE 754 double-precision floating point, and that this affects most other languages using the same standard? Cite sources."
+  },
+  {
+    "id": "js-0003",
+    "topic": "javascript",
+    "mode": "quick-fire",
+    "prompt": "A function is returned from another function and still has access to variables from the outer function's scope after the outer function has finished executing. What is this called?",
+    "options": ["Hoisting", "Closure", "Currying", "Memoization"],
+    "correctIndex": 1,
+    "explanation": "This is a closure — the inner function retains a reference to its lexical scope, so those variables stay alive as long as the closure itself is reachable. Hoisting, currying, and memoization are related but distinct concepts.",
+    "references": ["MDN: Closures"],
+    "teachMePrompt": "Explain JavaScript closures with a concrete example, including why the captured variables aren't garbage collected.",
+    "doubleCheckPrompt": "Is it accurate that a JavaScript closure keeps its outer function's variables alive via a reference to the lexical scope, even after the outer function returns? Cite sources."
+  },
+  {
+    "id": "js-0004",
+    "topic": "javascript",
+    "mode": "quick-fire",
+    "prompt": "What logs first: a `Promise.resolve().then(...)` callback or a `setTimeout(..., 0)` callback, when both are scheduled in the same synchronous block?",
+    "options": [
+      "The setTimeout callback, always",
+      "The Promise callback, always",
+      "Whichever was written first in the code",
+      "They always run in the same tick, order is undefined"
+    ],
+    "correctIndex": 1,
+    "explanation": "The Promise `.then()` callback runs first — it's queued as a microtask, and the microtask queue is fully drained after the current synchronous code finishes but before the event loop moves on to the next macrotask (like a timer). `setTimeout`, even with a 0ms delay, is a macrotask.",
+    "references": ["MDN: Microtask guide", "jakearchibald.com: Tasks, microtasks, queues and schedules"],
+    "teachMePrompt": "Explain the difference between microtasks and macrotasks in the JavaScript event loop, and why a resolved Promise's .then() always runs before a setTimeout(fn, 0).",
+    "doubleCheckPrompt": "Is it accurate that in JavaScript, a Promise.then() callback (microtask) always runs before a setTimeout(fn, 0) callback (macrotask) scheduled in the same synchronous block? Cite sources."
+  }
+]

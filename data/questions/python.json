@@ -1,0 +1,53 @@
+[
+  {
+    "id": "python-0001",
+    "topic": "python",
+    "mode": "quick-fire",
+    "prompt": "What's the risk of writing `def add_item(item, target=[]):` as a function signature in Python?",
+    "options": [
+      "It raises a SyntaxError at definition time",
+      "The default list is created once and shared across all calls that don't pass their own list",
+      "Python automatically deep-copies the default on every call, so there's no risk",
+      "It only affects performance, not correctness"
+    ],
+    "correctIndex": 1,
+    "explanation": "Default argument values are evaluated once, when the function is defined — not on each call. So `target=[]` creates a single list object that's reused and mutated across every call that relies on the default, leading to surprising shared state. The standard fix is `target=None` and creating a new list inside the function body.",
+    "references": ["Python docs: Default Argument Values"],
+    "teachMePrompt": "Explain why using a mutable default argument like a list in a Python function signature is a common bug, with an example showing the shared-state problem.",
+    "doubleCheckPrompt": "Is it accurate that Python default argument values are evaluated only once at function definition time, causing mutable defaults like [] to be shared across calls? Cite sources."
+  },
+  {
+    "id": "python-0002",
+    "topic": "python",
+    "mode": "quick-fire",
+    "prompt": "What is the primary practical difference between a Python list and a tuple?",
+    "options": [
+      "Tuples can only hold numbers",
+      "Lists are mutable; tuples are immutable",
+      "Tuples are always faster to iterate over than lists",
+      "Lists can't be nested; tuples can"
+    ],
+    "correctIndex": 1,
+    "explanation": "The core distinction is mutability — lists can be modified in place (append, remove, sort), while tuples cannot be changed after creation. This is also why tuples, unlike lists, can be used as dictionary keys or set members.",
+    "references": ["Python docs: Data Structures"],
+    "teachMePrompt": "Explain the practical differences between Python lists and tuples, including why immutability lets tuples be used as dict keys.",
+    "doubleCheckPrompt": "Is it accurate that the primary difference between Python lists and tuples is mutability, and that this is why tuples (not lists) can be used as dictionary keys? Cite sources."
+  },
+  {
+    "id": "python-0003",
+    "topic": "python",
+    "mode": "quick-fire",
+    "prompt": "What does the Global Interpreter Lock (GIL) in CPython primarily prevent?",
+    "options": [
+      "Multiple Python processes from running on the same machine",
+      "More than one native thread from executing Python bytecode at the same time within a single process",
+      "Python from being used for multithreaded I/O at all",
+      "Any use of the threading module"
+    ],
+    "correctIndex": 1,
+    "explanation": "The GIL ensures only one thread executes Python bytecode at a time within a single CPython process, which simplifies memory management but limits CPU-bound multithreading. It doesn't block multithreading for I/O-bound work (threads release the GIL during I/O waits), and it doesn't affect multiprocessing, since each process gets its own GIL.",
+    "references": ["Python docs: Glossary — global interpreter lock", "realpython.com: What is the Python GIL"],
+    "teachMePrompt": "Explain what the CPython GIL is, why it exists, and why it matters more for CPU-bound code than I/O-bound code.",
+    "doubleCheckPrompt": "Is it accurate that CPython's GIL only prevents concurrent execution of Python bytecode by threads within a single process, and doesn't affect multiprocessing or I/O-bound threading? Cite sources."
+  }
+]
