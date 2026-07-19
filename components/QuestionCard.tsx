@@ -47,7 +47,7 @@ export function QuestionCard({
 
   return (
     <div
-      className="relative flex w-full max-w-[320px] flex-col items-center"
+      className={`relative flex w-full max-w-[320px] flex-col items-center ${answered ? "cursor-pointer" : ""}`}
       onClick={answered ? onAdvance : undefined}
       onKeyDown={answered ? handleKeyDown : undefined}
     >

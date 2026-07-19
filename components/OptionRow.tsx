@@ -46,7 +46,7 @@ export function OptionRow({ label, variant, checked, onClick }: OptionRowProps) 
       tabIndex={0}
       onClick={onClick}
       onKeyDown={handleKeyDown}
-      className={`flex min-h-[52px] w-full items-center justify-between rounded-[10px] px-4 py-[13px] font-sans text-[14px] leading-[1.4] motion-safe:transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber focus-visible:outline-offset-2 ${VARIANT_CLASSES[variant]}`}
+      className={`flex min-h-[52px] w-full items-center justify-between rounded-[10px] px-4 py-[13px] font-sans text-[14px] leading-[1.4] motion-safe:transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber focus-visible:outline-offset-2 ${onClick ? "cursor-pointer" : "cursor-default"} ${VARIANT_CLASSES[variant]}`}
     >
       <span>{label}</span>
       {GLYPH[variant] && <span aria-hidden="true">{GLYPH[variant]}</span>}
