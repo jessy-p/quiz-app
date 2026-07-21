@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Serif_4, Inter, IBM_Plex_Mono } from "next/font/google";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
 const sourceSerif = Source_Serif_4({
@@ -41,6 +42,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-bg text-ink font-sans">
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

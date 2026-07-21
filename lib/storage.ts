@@ -16,10 +16,11 @@ export function getAttempts(): Attempt[] {
   }
 }
 
-export function appendAttempt(attempt: Attempt): void {
+export function appendAttempt(attempt: Attempt): Attempt[] {
   const attempts = getAttempts();
   attempts.push(attempt);
   localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+  return attempts;
 }
 
 export function getLastShownId(): string | null {

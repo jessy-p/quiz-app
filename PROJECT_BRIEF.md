@@ -86,39 +86,45 @@ Selection is a small, pure function — `lib/selectNextQuestion.ts` — that tak
 1. Attempt log — flat array, appended to locally on every attempt: `{ questionId, correct, timestamp }`. This feeds both the selection bias (if turned up) and progress reporting.
 2. Nothing else needs persisting — no in-progress session state, since there's no session concept.
 
-**Backup sync (secondary, not authoritative):** after each attempt, fire-and-forget `POST` the full updated attempt log to a simple API route backed by **Vercel KV**, purely for data-loss recovery (localStorage can be cleared by browser resets, PWA reinstalls, iOS storage eviction). If the write fails (offline, etc.), the app doesn't care — localStorage already has it, nothing is lost from the app's perspective, and the loop never waits on this call.
+**Backup sync (secondary, not authoritative):** after each attempt, fire-and-forget `POST` the full updated attempt log to a simple API route backed by **Vercel Blob**, purely for data-loss recovery (localStorage can be cleared by browser resets, PWA reinstalls, iOS storage eviction). If the write fails (offline, etc.), the app doesn't care — localStorage already has it, nothing is lost from the app's perspective, and the loop never waits on this call.
 
-- Transport model: each backup write sends the **full current log as a snapshot**, not a diff/append against what's already in KV — simplest option, fine at current scale (a few hundred bytes per attempt, thousands of attempts is still a small payload). This is a property of the backup write only; the local log itself is still appended to normally.
-- A random device token, generated on first load and stored in localStorage, is sent with each write and used as the KV key — not real auth, just enough that the backup endpoint isn't wide open to anyone who finds the URL.
+- Transport model: each backup write sends the **full current log as a snapshot**, not a diff/append against what's already stored — simplest option, fine at current scale (a few hundred bytes per attempt, thousands of attempts is still a small payload). This is a property of the backup write only; the local log itself is still appended to normally. Each write overwrites the same blob path (`addRandomSuffix: false` + `allowOverwrite: true`) rather than accumulating a new object per attempt — Blob's default is to append a random suffix per write, which would silently do the latter if left unset.
+- A random device token, generated on first load and stored in localStorage, is sent with each write and used as part of the blob's path — not real auth, just enough that the backup endpoint isn't wide open to anyone who finds the URL. The store itself is private (`access: "private"`); the blob URL is never returned to the client, so reaching the data requires both the token and the store's own server-side credential, not just a guessable URL.
 - The backend is a **passive backup destination only** — it never participates in the live question loop, and selection never reads from it. This was a real decision point, not an oversight: moving selection server-side would reintroduce a network dependency on the one interaction that most needs to stay instant and offline-capable.
 
 ## Progress reporting (deliberately kept OUT of the app)
 
-In-app: one small, unobtrusive **"Copy progress data" button** (tucked away, not on the main question screen) that copies the full attempt log + a schema/version marker to clipboard as JSON. This remains useful as a no-backend-needed fallback even with KV backup in place.
+In-app: one small, unobtrusive **"Copy progress data" button** (tucked away, not on the main question screen) that copies the full attempt log + a schema/version marker to clipboard as JSON. This remains useful as a no-backend-needed fallback even with Blob backup in place.
 
 Outside the app: a Claude Code slash command, e.g. `/progress`, that reads the attempt log and cross-references it against `/data/questions/*.json` to report things like weakest topics by miss-rate, questions missed more than once, overall coverage. Two ways to get the data in:
-- Pull directly from the Vercel KV backup (preferred once it exists — no manual step).
+- Pull directly from the Vercel Blob backup (preferred once it exists — no manual step).
 - Or take the pasted/copied blob from the in-app button (paste into terminal, or drop into a gitignored local file) — works with zero backend dependency.
 
 Either way, this is a look backward for the human, never a lever that changes app behavior.
 
 ## Content generation pipeline (Claude Code, agentic)
 
-Single-shot generation is weak for this — it tends to produce shallow or generic distractors, especially for Scenario mode, and can't fact-check itself. Use a multi-stage pipeline instead, each stage a distinct, narrowly-scoped agent call:
+Single-shot generation is weak for this — it tends to produce shallow or generic distractors, especially for Scenario mode, and can't fact-check itself. Two commands, with a planning conversation ahead of the first one:
 
-1. **Generator** — drafts a batch for a given topic/mode, follows the schema exactly. For CCAF, **must use web search** and ground claims in current sources — this cert is new enough (launched ~March 2026, per a quick search at brief-writing time) that training data is thin or stale. Domains to know, subject to re-verification: Agentic Architecture & Orchestration, Tool Design & MCP Integration, Claude Code Configuration & Workflows, Prompt Engineering & Structured Output, Context Management & Reliability. Exam format figures found at brief-writing time (60 questions, 120 min, 720/1000 to pass) are **not confirmed current** — the generator must re-check these via search before relying on them for any question content, rather than treating the numbers above as settled fact.
-2. **Adversarial reviewer** — separate call, explicitly framed as "try to break this question." For Scenario mode specifically: does each wrong option fail for a genuinely distinct reason, or are two of them wrong for the same underlying reason in disguise? Is there a defensible case for a "wrong" answer? Does the explanation actually teach the tradeoff or just assert the answer?
-3. **Fact-checker** — pulls claims out of context, verifies independently via search, flags anything it can't source. Especially load-bearing for CCAF content.
-4. **Staging, not silent merge** — output goes to `/data/_staging/{batch}.json`, not directly into the live bank. Flagged/rejected items should say *why*, not just vanish. A human skim before merge is the intended checkpoint — decide explicitly whether the reviewer is allowed to auto-fix flagged questions or only flag/reject (auto-fix is faster but means trusting the reviewer's fix, not just its judgment — leaning toward flag-only unless you decide otherwise).
+1. **Plan (conversation, not a command)** — before any generation runs, talk it through in a normal Claude Code conversation: what's thin in the current bank (topic/mode coverage gaps), what to target this round, any specific sources or angles to emphasize. This is the one point where scope and direction get steered — everything after it runs unattended. `/generate` is then invoked in the same conversation once the plan is agreed, not as a separate session with a formal handoff document.
+2. **`/generate`** — takes the agreed plan as context and runs the full pipeline **automatically, in one call**, no per-stage manual invocation:
+   - **One batch per invocation, hard-capped at ~15 questions.** That's roughly what a single generator/reviewer/fact-checker subagent call can do well before quality (distractor variety, genuine per-item scrutiny, real search verification rather than assumed-fine) visibly degrades. Bigger topics get covered across multiple separate `/generate` rounds over time, not one large auto-chunked run — tracking which sub-topics still need a round is the user's job (kept offline, outside the app/pipeline), not something the command tracks or persists.
+   - **Must be invoked in the same conversation as the planning step**, not a fresh session — that's what makes "takes the agreed plan as context" true at all. On invocation, the command's first move is to explicitly **synthesize the planning discussion into a concrete spec** (focus/sub-topic, mode, count) right there in the conversation, rather than assume it'll carry through implicitly. This matters because the generator/reviewer/fact-checker stages below run as separate, narrowly-scoped agent calls — spawned subagents don't automatically inherit the parent conversation's history, so the synthesized spec is what actually gets passed into each one.
+   - **The target bank is stated by the user directly** (e.g. "`/generate for javascript`" — takes `topic` as its argument), not inferred or guessed. The confirmation step prints it as its own visible line alongside the rest of the spec ("Bank: `javascript`, existing, N questions currently") — that's a checkpoint on the whole spec before anything unattended starts, not a mechanism for catching a wrong guess.
+   - **Generator** drafts a batch, follows the schema exactly. Given the existing bank's current prompts for that topic as context, so it doesn't regenerate ground already covered. For CCAF, **must use web search** and ground claims in current sources — this cert is new enough (launched ~March 2026, per a quick search at brief-writing time) that training data is thin or stale. Domains to know, subject to re-verification: Agentic Architecture & Orchestration, Tool Design & MCP Integration, Claude Code Configuration & Workflows, Prompt Engineering & Structured Output, Context Management & Reliability. Exam format figures found at brief-writing time (60 questions, 120 min, 720/1000 to pass) are **not confirmed current** — the generator must re-check these via search before relying on them for any question content, rather than treating the numbers above as settled fact.
+   - **Adversarial reviewer** — separate internal call, explicitly framed as "try to break this question." For Scenario mode specifically: does each wrong option fail for a genuinely distinct reason, or are two of them wrong for the same underlying reason in disguise? Is there a defensible case for a "wrong" answer? Does the explanation actually teach the tradeoff or just assert the answer? Also given the same existing-bank prompts as the generator, and flags anything that's a plain-judgment duplicate or near-duplicate of a question already live — no similarity tooling, just the reviewer's own read.
+   - **Fact-checker** — separate internal call, pulls claims out of context, verifies independently via search, flags anything it can't source. Especially load-bearing for CCAF content.
+   - **Flag-and-drop, not auto-fix.** A question either clears both checks and gets staged, or is dropped from the batch with its rejection reason logged in the command's summary output. Never silently rewritten — auto-fixing would mean trusting the fixer's judgment on every questionable case with no visibility, which defeats the point of a separate review stage. A dropped item just means the batch lands under the requested count; nothing needs individual triage.
+   - Output goes to `/data/_staging/{batch}.json`, not directly into the live bank.
+3. **Staging skim (you)** — a general skim of the batch shape before it enters your actual study pool, not a per-question reference audit.
+4. **`/merge`** — staging → live bank, after your skim.
 
 Suggested repo shape for this:
 
 ```
 /data/questions/{topic}.json      # live bank
 /data/_staging/{batch}.json       # pending review, gitignored or PR'd
-/.claude/commands/generate.md     # slash command: generate a batch
-/.claude/commands/review.md       # adversarial review pass
-/.claude/commands/factcheck.md    # source verification pass
+/.claude/commands/generate.md     # runs generate -> adversarial review -> fact-check -> stage, end to end
 /.claude/commands/merge.md        # staging -> live, after human skim
 /.claude/commands/progress.md     # reads pasted attempt log, reports back
 ```
@@ -129,7 +135,7 @@ Suggested repo shape for this:
 - **Tailwind** for styling — see design note below, avoid generic-AI-app look
 - No auth, no gate. Deployment is an obscure-but-technically-public URL — acceptable since this isn't sensitive, but don't actively promote/index it.
 - **PWA**: manifest + service worker so it installs to the home screen and the question bank is cached for true offline use (elevator, dead zones — matches the actual use case).
-- **Vercel KV** — one small API route, used *only* for the fire-and-forget attempt-log backup described in State & storage. Not used for question selection, not used for the question bank, not required for the app to function. No live API calls at runtime beyond this passive backup write — everything the loop needs is static content shipped with the app.
+- **Vercel Blob** — one small API route, used *only* for the fire-and-forget attempt-log backup described in State & storage. Not used for question selection, not used for the question bank, not required for the app to function. No live API calls at runtime beyond this passive backup write — everything the loop needs is static content shipped with the app.
 
 ## Repo structure
 
@@ -140,8 +146,11 @@ app/
   page.tsx                    # the one real screen — question view
   layout.tsx
   manifest.ts                 # PWA manifest
+  icon-192/route.tsx          # code-generated icons (next/og ImageResponse, no image tool needed)
+  icon-512/route.tsx
+  apple-icon.tsx
   api/
-    backup/route.ts           # POST handler for the KV fire-and-forget write
+    backup/route.ts           # POST handler for the Blob fire-and-forget write
 
 components/
   QuestionCard.tsx
@@ -157,7 +166,7 @@ lib/
   config.ts                   # bias constant (default 0), other tunables
   storage.ts                  # localStorage read/write for attempt log
   deviceToken.ts              # generates/persists the anti-abuse token
-  backupSync.ts               # fire-and-forget POST to the KV API route
+  backupSync.ts               # fire-and-forget POST to the Blob-backed API route
 
 types/
   question.ts                 # Question schema — single source of truth. Imported
@@ -181,15 +190,12 @@ data/
 
 .claude/
   commands/
-    generate.md
-    review.md
-    factcheck.md
+    generate.md                 # generate -> adversarial review -> fact-check -> stage, end to end
     merge.md
     progress.md
 
 public/
-  manifest.json / icons/       # PWA assets
-  sw.js                        # service worker (or generated by a PWA plugin)
+  sw.js                        # hand-rolled service worker, runtime caching (see PLAN.md Phase 4)
 ```
 
 ## Design direction — "Reading Lamp" (finalized)
@@ -259,7 +265,7 @@ Reference / Teach Me / Double Check all open the **same reusable bottom-sheet co
 ## Explicitly out of scope (for now)
 
 - No live chat/API calls from within the app (Teach Me / Double Check are copyable prompts, not inline answers)
-- No cross-device sync (single device; KV backup is for recovery, not sync — no read-back into the app)
+- No cross-device sync (single device; Blob backup is for recovery, not sync — no read-back into the app)
 - No classic spaced repetition (due-dates, decay curves, review queues) — only a simple optional weight-toward-missed-questions bias, off by default
 - No auth/accounts (device token is anti-abuse only, not real auth)
 - No in-app progress dashboard — reporting lives in Claude Code / external chat only

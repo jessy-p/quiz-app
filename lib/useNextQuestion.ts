@@ -3,6 +3,7 @@ import type { Question } from "@/types/question";
 import { selectNextQuestion } from "@/lib/selectNextQuestion";
 import { getAttempts, appendAttempt, getLastShownId, setLastShownId } from "@/lib/storage";
 import { BIAS } from "@/lib/config";
+import { syncBackup } from "@/lib/backupSync";
 
 /**
  * The only thing that touches localStorage. Picks the first question on
@@ -26,7 +27,8 @@ export function useNextQuestion(pool: Question[]) {
 
   function recordAnswer(selectedIndex: number, correct: boolean) {
     if (!question) return;
-    appendAttempt({ questionId: question.id, correct, timestamp: Date.now() });
+    const attempts = appendAttempt({ questionId: question.id, correct, timestamp: Date.now() });
+    syncBackup(attempts);
   }
 
   function advance() {

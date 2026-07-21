@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# content pipeline — transient, staged output before /merge
+/data/_staging/*
+!/data/_staging/.gitkeep
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env*.local

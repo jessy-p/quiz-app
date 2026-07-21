@@ -13,7 +13,7 @@
     "correctIndex": 1,
     "explanation": "Idempotency means repeated identical requests produce the same end state as a single request — e.g. PUT /users/5 setting a user's name always results in the same final state, no matter how many times it's called. It doesn't mean no side effects (a PUT still writes data), just that repeating it is safe. GET, PUT, and DELETE are expected to be idempotent; POST generally is not.",
     "references": ["MDN: Idempotent (HTTP glossary)"],
-    "teachMePrompt": "Explain HTTP idempotency, which methods are expected to be idempotent by spec, and why POST typically isn't.",
+    "teachMePrompt": "I just learned what it means for an HTTP endpoint to be idempotent. Teach me the full mental model of idempotency and safety in HTTP: which methods are idempotent by spec (GET, PUT, DELETE) versus which aren't (POST), why safety and idempotency are actually two different properties that often get conflated, and how idempotency keys let systems make even non-idempotent operations like POST retry-safe. Don't just define the term — show me the whole framework it sits in.",
     "doubleCheckPrompt": "Is it accurate that an idempotent HTTP endpoint produces the same end server state whether called once or multiple times with the same input, and that PUT/GET/DELETE are expected to be idempotent while POST isn't? Cite sources."
   },
   {
@@ -25,7 +25,7 @@
     "correctIndex": 1,
     "explanation": "The full (joking) quote is: 'There are only two hard things in Computer Science: cache invalidation and naming things.' It's usually cited to acknowledge how deceptively difficult cache invalidation is in practice — knowing exactly when cached data has gone stale and needs to be refreshed or evicted.",
     "references": ["Wikiquote: Phil Karlton"],
-    "teachMePrompt": "Explain why cache invalidation is considered a genuinely hard problem in backend systems, with common strategies (TTL, write-through, event-based invalidation) and their tradeoffs.",
+    "teachMePrompt": "I just learned why cache invalidation is considered one of the two hard problems in computer science. Teach me the full mental model of caching strategies in backend systems: TTL-based expiry, write-through vs write-behind vs cache-aside, event-driven invalidation, and the fundamental staleness-vs-consistency tradeoff that makes invalidation hard in the first place. Don't just explain why it's hard — show me the toolbox of strategies and where each one trades off.",
     "doubleCheckPrompt": "Is it accurate that the well-known quote about the two hard problems in computer science pairs 'cache invalidation' with 'naming things,' attributed to Phil Karlton? Cite sources."
   }
 ]
