@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Study Loop",
     short_name: "Study Loop",
-    description: "A phone-first MCQ study app for interview and CCAF prep.",
+    description: "A phone-first MCQ study app for focused, distraction-free studying.",
     start_url: "/",
     display: "standalone",
     background_color: "#17140f",

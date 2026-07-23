@@ -1,10 +1,10 @@
 # Study Loop — Project Brief
 
-A phone-first MCQ study app to replace idle scrolling with interview/cert prep. Single user, single device, no accounts, no filtering UI. Open it, answer a question, close it — zero friction in either direction.
+A phone-first MCQ study app to replace idle scrolling with actual studying. Single user, single device, no accounts, no filtering UI. Open it, answer a question, close it — zero friction in either direction.
 
 ## Why this exists
 
-Idle, reflexive phone scrolling → redirect that reflex toward something useful: interview prep (JS/Python/Node, REST/system design/backend architecture, general interview facts) and CCAF (Claude Certified Architect – Foundations) exam prep.
+Idle, reflexive phone scrolling → redirect that reflex toward something useful: studying whatever's actually on the docket. That's interview/cert prep today, but the app and pipeline aren't tied to any fixed subject — the topic is whatever the content pipeline gets pointed at next (a cert exam, world capitals, political history, anything), entirely at the user's discretion, not something baked into the design.
 
 Design philosophy: **the app must never become a chore or add pressure.** No streaks, no "X remaining," no session summaries, no gamification, no filtering/menu chrome before the question. Selection is random **by default** — this is explicitly *not* a curriculum or due-date scheduler. See Selection logic below for the optional bias mechanism.
 
@@ -22,13 +22,13 @@ No session end state. No "you got 7/10." The only summary exists outside the liv
 
 Both modes are drawn from **one shared random pool** — invisibly tagged by `topic` and `mode` in the data, never exposed as a filter in the UI.
 
-**Quick Fire** — straight MCQ. JS/Python/Node syntax & concepts, general interview facts, CCAF terminology. Fast, single correct answer, brief explanation.
+**Quick Fire** — straight MCQ, fast, single correct answer, brief explanation. Fits any subject where a fact has one unambiguous right answer — syntax & concepts, terminology, dates, geography, whatever the current topic actually is.
 
-**Scenario** — design-judgment questions. REST/system design, backend architecture, and the judgment-heavy CCAF domains (agentic orchestration, MCP tool boundaries, context management tradeoffs). Format: a short realistic scenario, several options where **every wrong option is wrong for a distinct, real reason** — not generic distractors. The explanation must cover why each wrong answer fails, not just confirm the right one. This is the mode's entire value; don't let it degrade into Quick-Fire-with-more-words.
+**Scenario** — design-judgment questions. Format: a short realistic scenario, several options where **every wrong option is wrong for a distinct, real reason** — not generic distractors. The explanation must cover why each wrong answer fails, not just confirm the right one. This is the mode's entire value; don't let it degrade into Quick-Fire-with-more-words. Fits subjects with genuine tradeoffs to reason through (e.g. REST/system design, backend architecture) — not every subject needs it; a purely factual topic may end up quick-fire only, and that's fine.
 
 ## Per-question actions (static, no live API calls, fully offline-capable)
 
-- **Reference** — short list of sources to check (MDN, official docs, Anthropic docs for CCAF domains, etc.)
+- **Reference** — short list of sources to check (MDN, official docs, or whatever's canonical for the current subject, etc.)
 - **Teach me** — a brief explanation plus a **copyable prompt** worded to take to Claude/ChatGPT for a deeper explanation elsewhere. The app does not have a bundled chat — this is a handoff, not a feature.
 - **Double check** — a second, differently-worded **copyable prompt**, specifically phrased for skeptical independent verification ("is this claim accurate, cite sources") — distinct wording from Teach Me since the intents differ.
 
@@ -36,18 +36,13 @@ All three open as a shared bottom-sheet component over the question card — see
 
 ## Data model
 
-Static JSON in the repo, not a database. Something like:
+Static JSON in the repo, not a database — one file per topic, created as needed:
 
 ```
-/data/questions/js.json
-/data/questions/python.json
-/data/questions/node.json
-/data/questions/rest-api.json
-/data/questions/system-design.json
-/data/questions/backend-general.json
-/data/questions/interview-facts.json
-/data/questions/ccaf.json
+/data/questions/{topic}.json    # e.g. javascript.json, capitals-and-countries.json — any topic, no fixed list
 ```
+
+`topic` is an open string (see `types/question.ts`) — the app has no built-in notion of which subjects exist. New topics just mean a new file; nothing elsewhere needs to change to support one.
 
 Each question object:
 
@@ -104,18 +99,17 @@ Either way, this is a look backward for the human, never a lever that changes ap
 
 ## Content generation pipeline (Claude Code, agentic)
 
-Single-shot generation is weak for this — it tends to produce shallow or generic distractors, especially for Scenario mode, and can't fact-check itself. Two commands, with a planning conversation ahead of the first one:
+Single-shot generation is weak for this — it tends to produce shallow or generic distractors, especially for Scenario mode, and can't fact-check itself. Three commands:
 
-1. **Plan (conversation, not a command)** — before any generation runs, talk it through in a normal Claude Code conversation: what's thin in the current bank (topic/mode coverage gaps), what to target this round, any specific sources or angles to emphasize. This is the one point where scope and direction get steered — everything after it runs unattended. `/generate` is then invoked in the same conversation once the plan is agreed, not as a separate session with a formal handoff document.
-2. **`/generate`** — takes the agreed plan as context and runs the full pipeline **automatically, in one call**, no per-stage manual invocation:
-   - **One batch per invocation, hard-capped at ~15 questions.** That's roughly what a single generator/reviewer/fact-checker subagent call can do well before quality (distractor variety, genuine per-item scrutiny, real search verification rather than assumed-fine) visibly degrades. Bigger topics get covered across multiple separate `/generate` rounds over time, not one large auto-chunked run — tracking which sub-topics still need a round is the user's job (kept offline, outside the app/pipeline), not something the command tracks or persists.
-   - **Must be invoked in the same conversation as the planning step**, not a fresh session — that's what makes "takes the agreed plan as context" true at all. On invocation, the command's first move is to explicitly **synthesize the planning discussion into a concrete spec** (focus/sub-topic, mode, count) right there in the conversation, rather than assume it'll carry through implicitly. This matters because the generator/reviewer/fact-checker stages below run as separate, narrowly-scoped agent calls — spawned subagents don't automatically inherit the parent conversation's history, so the synthesized spec is what actually gets passed into each one.
-   - **The target bank is stated by the user directly** (e.g. "`/generate for javascript`" — takes `topic` as its argument), not inferred or guessed. The confirmation step prints it as its own visible line alongside the rest of the spec ("Bank: `javascript`, existing, N questions currently") — that's a checkpoint on the whole spec before anything unattended starts, not a mechanism for catching a wrong guess.
-   - **Generator** drafts a batch, follows the schema exactly. Given the existing bank's current prompts for that topic as context, so it doesn't regenerate ground already covered. For CCAF, **must use web search** and ground claims in current sources — this cert is new enough (launched ~March 2026, per a quick search at brief-writing time) that training data is thin or stale. Domains to know, subject to re-verification: Agentic Architecture & Orchestration, Tool Design & MCP Integration, Claude Code Configuration & Workflows, Prompt Engineering & Structured Output, Context Management & Reliability. Exam format figures found at brief-writing time (60 questions, 120 min, 720/1000 to pass) are **not confirmed current** — the generator must re-check these via search before relying on them for any question content, rather than treating the numbers above as settled fact.
-   - **Adversarial reviewer** — separate internal call, explicitly framed as "try to break this question." For Scenario mode specifically: does each wrong option fail for a genuinely distinct reason, or are two of them wrong for the same underlying reason in disguise? Is there a defensible case for a "wrong" answer? Does the explanation actually teach the tradeoff or just assert the answer? Also given the same existing-bank prompts as the generator, and flags anything that's a plain-judgment duplicate or near-duplicate of a question already live — no similarity tooling, just the reviewer's own read.
-   - **Fact-checker** — separate internal call, pulls claims out of context, verifies independently via search, flags anything it can't source. Especially load-bearing for CCAF content.
-   - **Flag-and-drop, not auto-fix.** A question either clears both checks and gets staged, or is dropped from the batch with its rejection reason logged in the command's summary output. Never silently rewritten — auto-fixing would mean trusting the fixer's judgment on every questionable case with no visibility, which defeats the point of a separate review stage. A dropped item just means the batch lands under the requested count; nothing needs individual triage.
-   - Output goes to `/data/_staging/{batch}.json`, not directly into the live bank.
+1. **`/discuss`** — an interactive planning command, not an ad-hoc conversation. Asks what you want to learn and whether you already have reference material (files/links/notes) to ground the batch in; reads current per-topic/per-mode counts from the live bank so topic suggestions are grounded in actual gaps, not guesses; then **breaks the target into sections** — non-overlapping sub-topics, each with its own sub-focus, mode (`quick-fire`/`scenario`, a per-section judgment call — design/judgment tradeoffs are scenario, single syntax/mechanism facts are quick-fire), count, and fact-check decision. Sections exist specifically so generation can scale past a single call's quality ceiling: each section stays small enough (~15-20) to stay sharp, and — because sections are non-overlapping by construction — they can be generated **in parallel** rather than one at a time. Ends by confirming the full spec, then asking whether to generate now (in this same conversation, via `/generate`) or export a copy-paste prompt to run in a different tool, bringing the result back into `/generate` afterward.
+2. **`/generate`** — executes the confirmed spec, or validates content brought back from elsewhere:
+   - **Execute mode**: reads the spec `/discuss` produced (must be invoked in the same conversation — a fresh session has no way to know what was agreed) and spawns **one generator subagent per section, in parallel** — not sequentially, since non-overlapping sections don't need to see each other's output to avoid duplicating one another. Each subagent is self-contained: its own section's spec, the exact schema, the style-anchor examples, that section's dedup list (existing bank prompts for that sub-focus), any reference material `/discuss` collected for it, and — for any section marked **time-sensitive** (new or fast-moving enough that training data is likely thin or stale) — an instruction to use web search and ground claims in current sources. CCAF is today's clearest example (the cert is new enough, launched ~March 2026 per a quick search at brief-writing time, that training data is thin or stale; exam-format figures found at brief-writing time — 60 questions, 120 min, 720/1000 to pass — are **not confirmed current** and must be re-checked), but the treatment applies to any topic with the same property, not to CCAF specifically. If `/generate` is invoked directly without `/discuss` first, it falls back to a lightweight single-section spec synthesized inline (same per-question mode/fact-check judgment calls, still capped ~15-20) — fine for a small one-off ask, but `/discuss` is the better path for anything bigger.
+   - **Bring-your-own mode**: the user supplies already-written question content (pasted, or a file) — including content generated externally via `/discuss`'s exported prompt — and `/generate` format-checks it against the schema first, then runs it through the same review/fact-check below. No per-section generation cap applies (nothing's being invented), but review/fact-check still chunk at ~20-25 per call, same as Execute mode.
+   - **Adversarial reviewer always runs; fact-checker is conditional**, decided per section/topic. Fact-check is mandatory for **time-sensitive** content — anything new or fast-moving enough that training data is likely thin or stale (CCAF is today's clearest example, not a special case baked into the rule itself). It's skipped by default for stable, well-established technical content, where a search is very unlikely to catch a real error: on the one real batch run so far, review caught 2 substantive issues out of 15 while fact-check caught 0 out of 13, which is exactly the pattern you'd expect for foundational language mechanics versus a fast-moving domain. When fact-check does run, it goes in parallel with review (not sequentially) — both are independent evaluations of the same batch/chunk, and review is typically the far slower stage, so serializing them just adds the faster one's time for no benefit. Fact-check (when it runs) covers the full chunk, not just whatever review passes — gating one on the other would reintroduce the sequential dependency. Every subagent that runs gets the full batch/chunk pasted directly into its prompt (not a file to read), to avoid an extra tool round-trip. Review/fact-check chunk at ~20-25 questions per call **regardless of mode** — Execute mode's combined batch (summed across sections) can exceed one call's rigor ceiling just as easily as a large bring-your-own batch can.
+   - **Adversarial reviewer** — explicitly framed as "try to break this question." For Scenario mode specifically: does each wrong option fail for a genuinely distinct reason, or are two of them wrong for the same underlying reason in disguise? Is there a defensible case for a "wrong" answer? Does the explanation actually teach the tradeoff or just assert the answer? Also checks for duplicate/near-duplicate against the section's/topic's dedup list *and* across sections/chunks within the same run — no similarity tooling, just the reviewer's own read.
+   - **Fact-checker** (when it runs) — pulls claims out of context, verifies independently via search, flags anything it can't source. Especially load-bearing for time-sensitive content.
+   - **Flag-and-drop, not auto-fix.** A question is staged if it clears review (and fact-check too, when fact-check ran) — otherwise it's dropped with its rejection reason logged in the command's summary output. Never silently rewritten — auto-fixing would mean trusting the fixer's judgment on every questionable case with no visibility, which defeats the point of a separate review stage. A dropped item just means the batch lands under the requested count; nothing needs individual triage.
+   - Output goes to `/data/_staging/{batch}.json`, not directly into the live bank. Full mechanics in `.claude/commands/discuss.md` and `.claude/commands/generate.md`.
 3. **Staging skim (you)** — a general skim of the batch shape before it enters your actual study pool, not a per-question reference audit.
 4. **`/merge`** — staging → live bank, after your skim.
 
@@ -124,7 +118,8 @@ Suggested repo shape for this:
 ```
 /data/questions/{topic}.json      # live bank
 /data/_staging/{batch}.json       # pending review, gitignored or PR'd
-/.claude/commands/generate.md     # runs generate -> adversarial review -> fact-check -> stage, end to end
+/.claude/commands/discuss.md      # interactive planning -> confirmed spec, sectioned for parallel generation
+/.claude/commands/generate.md     # executes the spec (parallel per-section) or validates bring-your-own content -> review -> fact-check -> stage
 /.claude/commands/merge.md        # staging -> live, after human skim
 /.claude/commands/progress.md     # reads pasted attempt log, reports back
 ```
@@ -177,20 +172,14 @@ types/
 
 data/
   questions/
-    js.json
-    python.json
-    node.json
-    rest-api.json
-    system-design.json
-    backend-general.json
-    interview-facts.json
-    ccaf.json
+    {topic}.json               # one per topic, created as needed — no fixed list
   _staging/
     {batch}.json               # pending review, gitignored or PR'd before merge
 
 .claude/
   commands/
-    generate.md                 # generate -> adversarial review -> fact-check -> stage, end to end
+    discuss.md                  # interactive planning -> confirmed spec, sectioned for parallel generation
+    generate.md                 # executes the spec (parallel per-section) or validates bring-your-own content -> stage
     merge.md
     progress.md
 

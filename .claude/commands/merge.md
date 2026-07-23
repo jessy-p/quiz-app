@@ -27,23 +27,12 @@ Ask for confirmation via AskUserQuestion: merge the whole batch, or let the user
 
 ## Step 4 — Assign real IDs and merge, per topic
 
-Topic → ID prefix (fixed mapping, independent of which topic files currently exist):
-
-| topic | prefix |
-|---|---|
-| javascript | `js` |
-| python | `python` |
-| node | `node` |
-| rest-api | `ra` |
-| backend-general | `bg` |
-| interview-facts | `if` |
-| system-design | `sd` |
-| ccaf | `ccaf` |
+Topics are open (any lowercase-hyphenated slug — see `types/question.ts`), so there's no fixed prefix table. **The ID prefix is the topic slug itself** — a `capitals-and-countries` question gets IDs like `capitals-and-countries-0001`. Simple and collision-free without needing to invent or maintain an abbreviation per topic.
 
 For each topic present in the confirmed batch:
 
 1. If `data/questions/{topic}.json` doesn't exist yet, create it as `[]` first.
-2. Scan the existing file for the current highest `{prefix}-NNNN` number (0 if the file is empty) and assign the batch's questions for this topic sequential IDs continuing from there, zero-padded to 4 digits (matching `js-0001` style).
+2. Scan the existing file for whatever prefix its IDs already use (a topic file created before this convention, like `javascript`'s `js-0001`, keeps its existing prefix — don't rename established IDs) and the current highest `{prefix}-NNNN` number (0 if the file is empty); assign the batch's new questions sequential numbers continuing from there, zero-padded to 4 digits. For a brand-new topic file, the prefix is the topic slug itself.
 3. Append the questions to the array and write the file back. Match the existing formatting style (2-space indent); it's fine if it's not byte-identical to hand-written entries, just keep it readable and consistent within the file.
 4. If this topic file didn't exist before this run, add the missing import + spread line to `lib/questionPool.ts` (follow the existing pattern exactly — it's a small hand-maintained list, not auto-discovered).
 

@@ -23,7 +23,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Study Loop",
-  description: "A phone-first MCQ study app for interview and CCAF prep.",
+  description: "A phone-first MCQ study app for focused, distraction-free studying.",
 };
 
 export const viewport: Viewport = {

@@ -1,12 +1,5 @@
-export type Topic =
-  | "javascript"
-  | "python"
-  | "node"
-  | "rest-api"
-  | "system-design"
-  | "backend-general"
-  | "interview-facts"
-  | "ccaf";
+/** Open — any lowercase-hyphenated slug. This app is a generic study tool, not tied to any fixed subject list. */
+export type Topic = string;
 
 export type Mode = "quick-fire" | "scenario";
 
