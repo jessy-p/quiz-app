@@ -23,7 +23,7 @@ export function ProgressSummary() {
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber" /> correct so far
         </span>
         <span className="flex items-center gap-1">
-          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-oxide" /> missed at least once
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-oxide" /> currently missed
         </span>
         <span className="flex items-center gap-1">
           <span aria-hidden="true" className="h-2 w-2 rounded-full bg-ink-82/15" /> not attempted
@@ -41,7 +41,7 @@ export function ProgressSummary() {
             </div>
             <div
               role="img"
-              aria-label={`${t.label}: ${t.clean} correct so far, ${t.mistake} missed at least once, ${t.unattempted} not attempted, out of ${t.total} total`}
+              aria-label={`${t.label}: ${t.clean} correct so far, ${t.mistake} currently missed, ${t.unattempted} not attempted, out of ${t.total} total`}
               className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-ink-82/10"
             >
               <div className="h-full bg-amber" style={{ width: `${(t.clean / t.total) * 100}%` }} />
