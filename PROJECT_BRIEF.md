@@ -255,7 +255,7 @@ A fixed top-right amber dot icon — same quiet, no-chrome visual family as the 
 
 - **Random** — tapping switches selection back to the default uniform-random pool immediately and closes the hub.
 - **Sequential** — tapping expands to list every topic present in the pool with its question count; picking one switches to walking that topic's questions in strict ascending ID order (never random), auto-advancing forward on every answer regardless of correct/incorrect. A per-topic cursor (last question shown) persists across sessions, so returning to a topic later resumes where you left off rather than restarting.
-- **Progress** — tapping expands to a lightweight report: weakest topics by miss-rate, questions missed more than once, overall bank coverage — computed entirely from the on-device attempt log, instantly, with no network call. See Progress reporting, below.
+- **Progress** — tapping expands to a per-topic coverage view: for each topic, a bar showing how many questions are currently correct, missed, or not yet attempted — computed entirely from the on-device attempt log, instantly, with no network call. See Progress reporting, below.
 
 Opening or closing the hub alone never changes anything on screen — only an actual selection (Random, or a Sequential topic) does.
 
