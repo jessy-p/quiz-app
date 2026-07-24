@@ -83,19 +83,20 @@ Selection is a small, pure function — `lib/selectNextQuestion.ts` — that tak
 
 **Backup sync (secondary, not authoritative):** after each attempt, fire-and-forget `POST` the full updated attempt log to a simple API route backed by **Vercel Blob**, purely for data-loss recovery (localStorage can be cleared by browser resets, PWA reinstalls, iOS storage eviction). If the write fails (offline, etc.), the app doesn't care — localStorage already has it, nothing is lost from the app's perspective, and the loop never waits on this call.
 
+**Manual recovery (deliberate, by-hand — not automated):** the device token that addresses the Blob path lives in the same localStorage as the attempt log, so a wipe loses the pointer to the backup along with the data itself — the app can't self-heal automatically. If it ever happens: open the Vercel dashboard's Blob store, find `attempts/<token>.json` (one file per device), copy its `attempts` array, then in the browser devtools console run `localStorage.setItem('study-loop:attempts', '<pasted JSON>')` and reload. No need to restore the old token — a fresh one is minted the next time it's needed and backup writes continue under a new blob path; the old file is simply orphaned. This stays a manual, occasional fallback by design, consistent with the app not caring when a backup write itself fails.
+
 - Transport model: each backup write sends the **full current log as a snapshot**, not a diff/append against what's already stored — simplest option, fine at current scale (a few hundred bytes per attempt, thousands of attempts is still a small payload). This is a property of the backup write only; the local log itself is still appended to normally. Each write overwrites the same blob path (`addRandomSuffix: false` + `allowOverwrite: true`) rather than accumulating a new object per attempt — Blob's default is to append a random suffix per write, which would silently do the latter if left unset.
 - A random device token, generated on first load and stored in localStorage, is sent with each write and used as part of the blob's path — not real auth, just enough that the backup endpoint isn't wide open to anyone who finds the URL. The store itself is private (`access: "private"`); the blob URL is never returned to the client, so reaching the data requires both the token and the store's own server-side credential, not just a guessable URL.
 - The backend is a **passive backup destination only** — it never participates in the live question loop, and selection never reads from it. This was a real decision point, not an oversight: moving selection server-side would reintroduce a network dependency on the one interaction that most needs to stay instant and offline-capable.
 
-## Progress reporting (deliberately kept OUT of the app)
+## Progress reporting
 
-In-app: one small, unobtrusive **"Copy progress data" button** (tucked away, not on the main question screen) that copies the full attempt log + a schema/version marker to clipboard as JSON. This remains useful as a no-backend-needed fallback even with Blob backup in place.
+Two independent paths, reading two different data sources — not two views of one shared fetch:
 
-Outside the app: a Claude Code slash command, e.g. `/progress`, that reads the attempt log and cross-references it against `/data/questions/*.json` to report things like weakest topics by miss-rate, questions missed more than once, overall coverage. Two ways to get the data in:
-- Pull directly from the Vercel Blob backup (preferred once it exists — no manual step).
-- Or take the pasted/copied blob from the in-app button (paste into terminal, or drop into a gitignored local file) — works with zero backend dependency.
+- **In-app (Study Hub → Progress)** — a quick glance, computed entirely from the local attempt log already on-device (see Study Hub, below). Instant, no network call, no export step.
+- **`/progress` (Claude Code slash command)** — the deeper tool: reads the attempt log from the Vercel Blob backup and cross-references it against `/data/questions/*.json` to report weakest topics by miss-rate, questions missed more than once, overall coverage.
 
-Either way, this is a look backward for the human, never a lever that changes app behavior.
+Both are a look backward for the human, never a lever that changes app behavior.
 
 ## Content generation pipeline (Claude Code, agentic)
 
@@ -121,7 +122,7 @@ Suggested repo shape for this:
 /.claude/commands/discuss.md      # interactive planning -> confirmed spec, sectioned for parallel generation
 /.claude/commands/generate.md     # executes the spec (parallel per-section) or validates bring-your-own content -> review -> fact-check -> stage
 /.claude/commands/merge.md        # staging -> live, after human skim
-/.claude/commands/progress.md     # reads pasted attempt log, reports back
+/.claude/commands/progress.md     # pulls attempt log from Blob backup, reports back
 ```
 
 ## Tech stack
@@ -153,7 +154,6 @@ components/
   AnswerState.tsx             # correct/wrong visual + aria-live announcement
   SecondaryActionsRow.tsx     # Reference / Teach Me / Double Check row
   ActionSheet.tsx             # shared bottom-sheet, 3 content variants
-  CopyProgressGlyph.tsx       # corner affordance, outside the card
 
 lib/
   selectNextQuestion.ts       # pure function — pool, history, bias, lastShownId -> next question
@@ -225,14 +225,12 @@ Direction chosen after exploring three options in Claude Design. Full dev-ready 
 
 **Secondary actions row (Reference / Teach Me / Double Check):** 10.5px uppercase text, no border/fill, centered below the card, separated by `·`. Visually quieter than option rows and answer states. Fixed order (muscle memory). Invisible padding to reach 44×44px tap target even though visible text is small.
 
-**Copy progress data affordance:** small glyph icon fixed in a corner of the app shell (e.g. top-right, above safe area), `--ink-50` at rest, never competing with the question. Tap copies to clipboard, brief toast confirms. Same 44×44px padded hit-target treatment.
-
 **Accessibility requirements (non-negotiable, not just nice-to-have):**
 - All text tokens must clear their listed contrast ratio at actual rendered opacity — never use an unverified/lower opacity for a token.
 - Options render as a proper radio group (`role="radiogroup"` / `role="radio"` per option, or a native fieldset), not bare clickable `div`s.
 - Focus visibility: 2px `--amber` focus ring, 2px offset, on `:focus-visible` only (never on mouse/touch click).
 - Motion: radial glow is static by default; any answer-select transition must be gated behind `prefers-reduced-motion: no-preference`.
-- Touch targets: option rows ≥52px tall; every small/icon affordance (secondary actions, copy-progress glyph) padded to 44×44px regardless of visible glyph size.
+- Touch targets: option rows ≥52px tall; every small/icon affordance (secondary actions) padded to 44×44px regardless of visible glyph size.
 - Low-light use: avoid pure white anywhere — `#F6F1E9` is the max brightness token, to prevent glare in dark rooms (this is a genuinely dark-room-use app, not just a dark *theme*).
 
 ### Secondary action behavior (bottom sheet)
@@ -242,7 +240,7 @@ Reference / Teach Me / Double Check all open the **same reusable bottom-sheet co
 - **Reference:** heading "Reference," plain list from `references[]`. Bare source names stay as plain text; real URLs are tappable and open externally. Read-only, no copy action.
 - **Teach me:** heading "Teach me," the in-app `explanation` shown first as plain body text, then `teachMePrompt` in a visually distinct block (monospace/quoted styling, unambiguous "this is copyable text") with a **Copy** button beneath it.
 - **Double check:** shorter — a one-line frame ("Verify this independently"), then `doubleCheckPrompt` in the same copyable-block style + Copy button. No duplicate explanation, to keep it visibly distinct from Teach Me rather than a reskin of the same feature.
-- **Copy button:** tap → clipboard write → brief toast ("Copied — paste into Claude or ChatGPT"), same pattern as the copy-progress-data affordance. Sheet stays open afterward (no auto-dismiss) in case they want to reread.
+- **Copy button:** tap → clipboard write → brief toast ("Copied — paste into Claude or ChatGPT"). Sheet stays open afterward (no auto-dismiss) in case they want to reread.
 
 **Sheet mechanics:**
 - `role="dialog"` `aria-modal="true"`; focus moves into the sheet on open, returns to the triggering action label on close.
@@ -251,10 +249,20 @@ Reference / Teach Me / Double Check all open the **same reusable bottom-sheet co
 - Max-height ~55–60% of viewport, scrolls internally if content overflows — never covers the full screen.
 - **Opening a sheet never resets or advances the question underneath** — it's a read-only overlay on a frozen moment; dismissing returns to exactly the answered/unanswered state left behind.
 
+### Study Hub
+
+A fixed top-right amber dot icon — same quiet, no-chrome visual family as the rest of the app's affordances — opens a bottom-sheet overlay, same component pattern as the per-question `ActionSheet` above, stacked above it via z-index so both can independently be open. Three sections, fixed order:
+
+- **Random** — tapping switches selection back to the default uniform-random pool immediately and closes the hub.
+- **Sequential** — tapping expands to list every topic present in the pool with its question count; picking one switches to walking that topic's questions in strict ascending ID order (never random), auto-advancing forward on every answer regardless of correct/incorrect. A per-topic cursor (last question shown) persists across sessions, so returning to a topic later resumes where you left off rather than restarting.
+- **Progress** — tapping expands to a lightweight report: weakest topics by miss-rate, questions missed more than once, overall bank coverage — computed entirely from the on-device attempt log, instantly, with no network call. See Progress reporting, below.
+
+Opening or closing the hub alone never changes anything on screen — only an actual selection (Random, or a Sequential topic) does.
+
 ## Explicitly out of scope (for now)
 
 - No live chat/API calls from within the app (Teach Me / Double Check are copyable prompts, not inline answers)
 - No cross-device sync (single device; Blob backup is for recovery, not sync — no read-back into the app)
 - No classic spaced repetition (due-dates, decay curves, review queues) — only a simple optional weight-toward-missed-questions bias, off by default
 - No auth/accounts (device token is anti-abuse only, not real auth)
-- No in-app progress dashboard — reporting lives in Claude Code / external chat only
+- ~~No in-app progress dashboard — reporting lives in Claude Code / external chat only~~ Reversed: a lightweight in-app Progress view exists (behind the Study Hub icon, opt-in, computed entirely from the local attempt log — never a network call, never shown on the main loop). The Claude Code `/progress` command remains the deeper cross-referencing tool; the in-app view is a quick glance, not a replacement.

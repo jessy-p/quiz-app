@@ -54,6 +54,14 @@ Three Claude Code slash commands — `/discuss` (interactive planning conversati
 ## Phase 8 — Deploy + polish
 Vercel deploy. Accessibility re-check against real rendered output (not just the spec's on-paper contrast math). Real-device testing — one-handed use, low light, an actual elevator if you can manage it.
 
+## Phase 9 — Study Hub
+
+**Sequential Study Mode (shipped):** a top-right icon opens a bottom-sheet (`TopicPicker`) listing "Random" plus every topic; picking a topic walks its questions in strict ascending ID order via `useSequentialQuestion` (sibling hook to the random-mode `useNextQuestion`, same `{question, loading, recordAnswer, advance}` shape), with a per-topic cursor (last-shown question ID, not array index) persisted in `storage.ts`. Mode itself (`{type:"random"} | {type:"sequential", topic}`) lives in `StudyModeProvider`'s React Context — needed because the icon has to live in the Server Component root layout (`app/layout.tsx`), several layers above the Client Component that actually selects questions, and Context is what bridges that boundary.
+
+**Study Hub redesign (not yet started):** the same entry point grows from a plain topic picker into a 3-section accordion — Random / Sequential / Progress, in that order — since scope grew past "pick a topic." Renames: `TopicPicker`→`StudyHub`, `StudyModeIcon`→`StudyHubIcon`; topic-list rendering extracted into a new `TopicList`. New: `lib/computeProgress.ts` (pure function, pool + local attempt log → weakest topics / repeat misses / coverage) and `components/ProgressSummary.tsx` — **local-only, no new API route**, since Blob is secondary/non-authoritative and a network round-trip would add nothing a local computation doesn't already have (see below).
+
+**Manual recovery: documented, not built (deliberate).** While designing Progress, found that a localStorage wipe already loses the device token that addresses the Blob backup (`deviceToken.ts` stores it in the same localStorage), so Blob "recovery" doesn't actually self-heal today regardless of what Progress does. Considered building a user-visible/re-enterable sync code + merge-on-write to fix this properly and enable multi-device as a side effect — decided against it: a manual devtools/Blob-dashboard recovery procedure (documented in `PROJECT_BRIEF.md`) already covers the real, rare case (browser reset, reinstall, storage eviction) without the added complexity. Noting this explicitly so it isn't "rediscovered" as a bug later — it's a scoped-out feature, not an oversight.
+
 ## Explicitly deferred (not a phase — revisit only if it becomes a real problem)
 - Question bank fetch-as-static-asset (currently bundled import) — revisit around ~500 questions
 - Backup transport switched from full-snapshot writes to append-only — revisit if the log grows large enough to notice

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Question } from "@/types/question";
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/bodyScrollLock";
 
 export type ActionSheetVariant = "reference" | "teach-me" | "double-check";
 
@@ -115,7 +116,7 @@ export function ActionSheet({ variant, question, onClose }: ActionSheetProps) {
     if (!open) return;
 
     sheetRef.current?.focus();
-    document.body.style.overflow = "hidden";
+    lockBodyScroll();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -143,7 +144,7 @@ export function ActionSheet({ variant, question, onClose }: ActionSheetProps) {
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      unlockBodyScroll();
     };
   }, [open, onClose]);
 

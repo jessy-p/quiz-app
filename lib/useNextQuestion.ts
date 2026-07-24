@@ -8,11 +8,16 @@ import { syncBackup } from "@/lib/backupSync";
 /**
  * The only thing that touches localStorage. Picks the first question on
  * mount and exposes recordAnswer/advance for the rest of the loop.
+ *
+ * `active` lets this idle while sequential study mode is in use instead of
+ * picking a question that then just sits stale — and re-picks a fresh one
+ * when switching back to random mode.
  */
-export function useNextQuestion(pool: Question[]) {
+export function useNextQuestion(pool: Question[], active: boolean) {
   const [question, setQuestion] = useState<Question | null>(null);
 
   useEffect(() => {
+    if (!active) return;
     const history = getAttempts();
     const lastShownId = getLastShownId();
     const next = selectNextQuestion(pool, history, BIAS, lastShownId);
@@ -21,9 +26,9 @@ export function useNextQuestion(pool: Question[]) {
     // happen client-side on mount — this is the brief's documented loading flicker.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuestion(next);
-    // pool is a static import, stable across renders — intentionally run once.
+    // pool is a static import, stable across renders — intentionally re-run only on `active` change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
 
   function recordAnswer(selectedIndex: number, correct: boolean) {
     if (!question) return;

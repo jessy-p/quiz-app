@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Serif_4, Inter, IBM_Plex_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { StudyModeProvider } from "@/components/StudyModeProvider";
 import "./globals.css";
 
 const sourceSerif = Source_Serif_4({
@@ -41,7 +42,7 @@ export default function RootLayout({
       className={`${sourceSerif.variable} ${inter.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bg text-ink font-sans">
-        {children}
+        <StudyModeProvider>{children}</StudyModeProvider>
         <ServiceWorkerRegister />
       </body>
     </html>
