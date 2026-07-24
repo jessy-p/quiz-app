@@ -5,6 +5,7 @@ import type { StudyMode } from "@/lib/storage";
 import { questionPool } from "@/lib/questionPool";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/bodyScrollLock";
 import { TopicList } from "./TopicList";
+import { ProgressSummary } from "./ProgressSummary";
 
 interface StudyHubProps {
   open: boolean;
@@ -168,11 +169,8 @@ export function StudyHub({ open, mode, onSelect, onClose }: StudyHubProps) {
               Progress
             </button>
             {expanded === "progress" && (
-              <div
-                id="study-hub-progress-panel"
-                className="mt-2 rounded-[10px] border border-ink-82/10 px-4 py-3 font-sans text-[13px] text-ink-58"
-              >
-                Progress view — coming soon.
+              <div id="study-hub-progress-panel">
+                <ProgressSummary />
               </div>
             )}
           </li>
