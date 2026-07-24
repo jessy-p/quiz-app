@@ -29,6 +29,12 @@ export interface TopicCoverage {
   attempted: number;
   total: number;
   coveragePct: number;
+  /** Attempted, most recent attempt correct. */
+  clean: number;
+  /** Attempted, most recent attempt wrong. */
+  mistake: number;
+  /** Never attempted. */
+  unattempted: number;
 }
 
 export interface ProgressSummary {
@@ -49,12 +55,15 @@ export function computeProgress(pool: Question[], attempts: Attempt[]): Progress
   const questionStats = new Map<string, { attempted: number; missed: number }>();
   const attemptedIds = new Set<string>();
   const topicAttemptedIds = new Map<string, Set<string>>();
+  /** Overwritten on every attempt for a question, so it ends up holding the most recent one (attempts is chronological). */
+  const lastCorrect = new Map<string, boolean>();
 
   for (const attempt of attempts) {
     const question = questionsById.get(attempt.questionId);
     if (!question) continue;
 
     attemptedIds.add(attempt.questionId);
+    lastCorrect.set(attempt.questionId, attempt.correct);
 
     const topic = topicStats.get(question.topic) ?? { attempted: 0, missed: 0 };
     topic.attempted += 1;
@@ -72,13 +81,25 @@ export function computeProgress(pool: Question[], attempts: Attempt[]): Progress
   }
 
   const topicCoverage = getTopicSummaries(pool).map(({ topic, count }) => {
-    const attempted = topicAttemptedIds.get(topic)?.size ?? 0;
+    const attemptedIdsForTopic = topicAttemptedIds.get(topic) ?? new Set<string>();
+    const attempted = attemptedIdsForTopic.size;
+
+    let clean = 0;
+    let mistake = 0;
+    for (const id of attemptedIdsForTopic) {
+      if (lastCorrect.get(id)) clean += 1;
+      else mistake += 1;
+    }
+
     return {
       topic,
       label: humanizeTopic(topic),
       attempted,
       total: count,
       coveragePct: count === 0 ? 0 : Math.round((attempted / count) * 100),
+      clean,
+      mistake,
+      unattempted: count - attempted,
     };
   });
 

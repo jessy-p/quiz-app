@@ -29,6 +29,19 @@ export function ProgressSummary() {
         <p className="mt-1 font-sans text-[13px] text-ink-82">
           {summary.questionsAttempted} / {summary.poolSize} questions attempted ({summary.coveragePct}%)
         </p>
+
+        <div className="mt-2 flex gap-3 font-sans text-[10.5px] text-ink-58">
+          <span className="flex items-center gap-1">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-amber" /> correct so far
+          </span>
+          <span className="flex items-center gap-1">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-oxide" /> missed at least once
+          </span>
+          <span className="flex items-center gap-1">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-ink-82/15" /> not attempted
+          </span>
+        </div>
+
         <ul className="mt-3 flex flex-col gap-2">
           {summary.topicCoverage.map((t) => (
             <li key={t.topic}>
@@ -38,9 +51,17 @@ export function ProgressSummary() {
                   {t.attempted}/{t.total}
                 </span>
               </div>
-              <div className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-ink-82/10">
-                <div className="h-full bg-ink-82/40" style={{ width: `${t.coveragePct}%` }} />
-                <div className="h-full bg-oxide/50" style={{ width: `${100 - t.coveragePct}%` }} />
+              <div
+                role="img"
+                aria-label={`${t.label}: ${t.clean} correct so far, ${t.mistake} missed at least once, ${t.unattempted} not attempted, out of ${t.total} total`}
+                className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-ink-82/10"
+              >
+                <div className="h-full bg-amber" style={{ width: `${(t.clean / t.total) * 100}%` }} />
+                <div className="h-full bg-oxide" style={{ width: `${(t.mistake / t.total) * 100}%` }} />
+                <div
+                  className="h-full bg-ink-82/15"
+                  style={{ width: `${(t.unattempted / t.total) * 100}%` }}
+                />
               </div>
             </li>
           ))}
