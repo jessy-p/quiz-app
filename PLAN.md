@@ -48,13 +48,10 @@ Three Claude Code slash commands — `/discuss` (interactive planning conversati
 
 **Bring-your-own content.** `/generate` also accepts already-written question content (pasted, or a file) instead of executing a spec — format-checks it against the schema, then runs the same review/fact-check on it. This is also where content lands after using `/discuss`'s exported prompt externally. The per-section generation cap doesn't apply here (nothing's being invented), but review/fact-check still chunk at the same ~20-25/call as Execute mode. Full mechanics in `.claude/commands/generate.md` and `.claude/commands/discuss.md`.
 
-## Phase 7 — Progress command
-`/progress` — reads from the Vercel Blob backup or a copy-pasted attempt log, cross-references against the question bank, reports weakest topics / repeat misses / coverage.
-
-## Phase 8 — Deploy + polish
+## Phase 7 — Deploy + polish
 Vercel deploy. Accessibility re-check against real rendered output (not just the spec's on-paper contrast math). Real-device testing — one-handed use, low light, an actual elevator if you can manage it.
 
-## Phase 9 — Study Hub
+## Phase 8 — Study Hub
 
 **Sequential Study Mode (shipped):** a top-right icon opens a bottom-sheet (`TopicPicker`) listing "Random" plus every topic; picking a topic walks its questions in strict ascending ID order via `useSequentialQuestion` (sibling hook to the random-mode `useNextQuestion`, same `{question, loading, recordAnswer, advance}` shape), with a per-topic cursor (last-shown question ID, not array index) persisted in `storage.ts`. Mode itself (`{type:"random"} | {type:"sequential", topic}`) lives in `StudyModeProvider`'s React Context — needed because the icon has to live in the Server Component root layout (`app/layout.tsx`), several layers above the Client Component that actually selects questions, and Context is what bridges that boundary.
 

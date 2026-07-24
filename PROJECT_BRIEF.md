@@ -62,7 +62,7 @@ Each question object:
 
 `references` entries are plain display strings by default (e.g. `"MDN: HTTP redirects"`). If an entry should render as a tappable link in the Reference sheet, it must be a full `https://` URL string, detected at render time with a simple URL check — not a separate `{label, url}` shape. Keep this in mind when writing questions: only include a full URL when a tappable link is actually wanted.
 
-Schema should be finalized once, then treated as a contract — the app, the generator pipeline, and the progress-reporting command all depend on it staying stable.
+Schema should be finalized once, then treated as a contract — the app, the generator pipeline, and the in-app Progress view all depend on it staying stable.
 
 ## Selection logic
 
@@ -91,12 +91,11 @@ Selection is a small, pure function — `lib/selectNextQuestion.ts` — that tak
 
 ## Progress reporting
 
-Two independent paths, reading two different data sources — not two views of one shared fetch:
+In-app only (Study Hub → Progress) — a quick glance, computed entirely from the local attempt log already on-device (see Study Hub, below). Instant, no network call, no export step.
 
-- **In-app (Study Hub → Progress)** — a quick glance, computed entirely from the local attempt log already on-device (see Study Hub, below). Instant, no network call, no export step.
-- **`/progress` (Claude Code slash command)** — the deeper tool: reads the attempt log from the Vercel Blob backup and cross-references it against `/data/questions/*.json` to report weakest topics by miss-rate, questions missed more than once, overall coverage.
+A separate Claude Code command reading the Blob backup for deeper cross-referencing (weakest topics, repeat misses, overall coverage) was considered and deliberately dropped — the in-app per-topic view already carries enough signal on its own.
 
-Both are a look backward for the human, never a lever that changes app behavior.
+This is a look backward for the human, never a lever that changes app behavior.
 
 ## Content generation pipeline (Claude Code, agentic)
 
@@ -122,7 +121,6 @@ Suggested repo shape for this:
 /.claude/commands/discuss.md      # interactive planning -> confirmed spec, sectioned for parallel generation
 /.claude/commands/generate.md     # executes the spec (parallel per-section) or validates bring-your-own content -> review -> fact-check -> stage
 /.claude/commands/merge.md        # staging -> live, after human skim
-/.claude/commands/progress.md     # pulls attempt log from Blob backup, reports back
 ```
 
 ## Tech stack
@@ -191,7 +189,6 @@ data/
     discuss.md                  # interactive planning -> confirmed spec, sectioned for parallel generation
     generate.md                 # executes the spec (parallel per-section) or validates bring-your-own content -> stage
     merge.md
-    progress.md
 
 public/
   sw.js                        # hand-rolled service worker, runtime caching (see PLAN.md Phase 4)
@@ -275,4 +272,4 @@ Opening or closing the hub alone never changes anything on screen — only an ac
 - No cross-device sync (single device; Blob backup is for recovery, not sync — no read-back into the app)
 - No classic spaced repetition (due-dates, decay curves, review queues) — only a simple optional weight-toward-missed-questions bias, off by default
 - No auth/accounts (device token is anti-abuse only, not real auth)
-- ~~No in-app progress dashboard — reporting lives in Claude Code / external chat only~~ Reversed: a lightweight in-app Progress view exists (behind the Study Hub icon, opt-in, computed entirely from the local attempt log — never a network call, never shown on the main loop). The Claude Code `/progress` command remains the deeper cross-referencing tool; the in-app view is a quick glance, not a replacement.
+- ~~No in-app progress dashboard — reporting lives in Claude Code / external chat only~~ Reversed: a lightweight in-app Progress view exists (behind the Study Hub icon, opt-in, computed entirely from the local attempt log — never a network call, never shown on the main loop). No separate Claude Code reporting command exists or is planned — the in-app view is the only progress reporting this app has.
