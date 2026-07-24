@@ -4,8 +4,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { StudyMode } from "@/lib/storage";
 import { getStudyMode, setStudyMode } from "@/lib/storage";
 import { questionPool } from "@/lib/questionPool";
-import { StudyModeIcon } from "./StudyModeIcon";
-import { TopicPicker } from "./TopicPicker";
+import { StudyHubIcon } from "./StudyHubIcon";
+import { StudyHub } from "./StudyHub";
 
 interface StudyModeContextValue {
   mode: StudyMode;
@@ -31,7 +31,7 @@ export function useStudyMode(): StudyModeContextValue {
 export function StudyModeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<StudyMode>({ type: "random" });
   const [hydrated, setHydrated] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
 
   useEffect(() => {
     const persisted = getStudyMode();
@@ -45,18 +45,13 @@ export function StudyModeProvider({ children }: { children: React.ReactNode }) {
   function handleSelect(next: StudyMode) {
     setModeState(next);
     setStudyMode(next);
-    setPickerOpen(false);
+    setHubOpen(false);
   }
 
   return (
     <StudyModeContext.Provider value={{ mode, hydrated }}>
-      <StudyModeIcon mode={mode} onOpen={() => setPickerOpen(true)} />
-      <TopicPicker
-        open={pickerOpen}
-        mode={mode}
-        onSelect={handleSelect}
-        onClose={() => setPickerOpen(false)}
-      />
+      <StudyHubIcon mode={mode} onOpen={() => setHubOpen(true)} />
+      <StudyHub open={hubOpen} mode={mode} onSelect={handleSelect} onClose={() => setHubOpen(false)} />
       {children}
     </StudyModeContext.Provider>
   );

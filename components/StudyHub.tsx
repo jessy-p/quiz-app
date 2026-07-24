@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { StudyMode } from "@/lib/storage";
-import { getTopicSummaries, humanizeTopic } from "@/lib/topics";
 import { questionPool } from "@/lib/questionPool";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/bodyScrollLock";
+import { TopicList } from "./TopicList";
 
-interface TopicPickerProps {
+interface StudyHubProps {
   open: boolean;
   mode: StudyMode;
   onSelect: (mode: StudyMode) => void;
   onClose: () => void;
 }
+
+type ExpandedSection = "sequential" | "progress" | null;
 
 const ROW_CLASSES =
   "w-full rounded-[10px] border border-ink-82/20 px-4 py-3 text-left font-sans text-[14px] text-ink-82 motion-safe:transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber focus-visible:outline-offset-2";
@@ -21,14 +23,16 @@ const ROW_ACTIVE_CLASSES = "border-amber bg-amber/10 text-amber-text";
 /**
  * Bottom-sheet overlay, same pattern as ActionSheet (stays mounted, CSS
  * transform gates visibility, focus trap, Escape-to-close, swipe-to-dismiss,
- * body-scroll lock) but with list content instead of a variant switch.
- * Higher z-index than ActionSheet so tapping the study-mode icon while a
- * per-question action sheet is open just draws on top, no coordination needed.
+ * body-scroll lock). Three-section accordion — Random / Sequential /
+ * Progress — where Random is a direct action and the other two toggle a
+ * local `expanded` section to reveal their content underneath. Higher
+ * z-index than ActionSheet so tapping the hub icon while a per-question
+ * action sheet is open just draws on top, no coordination needed.
  */
-export function TopicPicker({ open, mode, onSelect, onClose }: TopicPickerProps) {
+export function StudyHub({ open, mode, onSelect, onClose }: StudyHubProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number | null>(null);
-  const summaries = getTopicSummaries(questionPool);
+  const [expanded, setExpanded] = useState<ExpandedSection>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -77,6 +81,10 @@ export function TopicPicker({ open, mode, onSelect, onClose }: TopicPickerProps)
     if (deltaY > 60) onClose();
   }
 
+  function toggleSection(section: "sequential" | "progress") {
+    setExpanded((current) => (current === section ? null : section));
+  }
+
   return (
     <>
       <div
@@ -91,7 +99,7 @@ export function TopicPicker({ open, mode, onSelect, onClose }: TopicPickerProps)
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="topic-picker-heading"
+        aria-labelledby="study-hub-heading"
         aria-hidden={!open}
         tabIndex={-1}
         className={`fixed inset-x-0 bottom-0 z-[60] max-h-[70vh] overflow-y-auto rounded-t-[10px] border-t border-ink-82/10 bg-bg px-6 pb-8 pt-3 motion-safe:transition-transform motion-safe:duration-300 ${
@@ -107,7 +115,7 @@ export function TopicPicker({ open, mode, onSelect, onClose }: TopicPickerProps)
         </div>
 
         <div className="flex items-center justify-between">
-          <h2 id="topic-picker-heading" className="font-serif text-[18px] text-ink">
+          <h2 id="study-hub-heading" className="font-serif text-[18px] text-ink">
             Study
           </h2>
           <button
@@ -130,21 +138,44 @@ export function TopicPicker({ open, mode, onSelect, onClose }: TopicPickerProps)
               Random · {questionPool.length} questions
             </button>
           </li>
-          {summaries.map(({ topic, count }) => {
-            const active = mode.type === "sequential" && mode.topic === topic;
-            return (
-              <li key={topic}>
-                <button
-                  type="button"
-                  onClick={() => onSelect({ type: "sequential", topic })}
-                  aria-current={active}
-                  className={`${ROW_CLASSES} ${active ? ROW_ACTIVE_CLASSES : ""}`}
-                >
-                  {humanizeTopic(topic)} · {count} questions
-                </button>
-              </li>
-            );
-          })}
+
+          <li>
+            <button
+              type="button"
+              onClick={() => toggleSection("sequential")}
+              aria-expanded={expanded === "sequential"}
+              aria-controls="study-hub-sequential-panel"
+              aria-current={mode.type === "sequential"}
+              className={`${ROW_CLASSES} ${mode.type === "sequential" ? ROW_ACTIVE_CLASSES : ""}`}
+            >
+              Sequential
+            </button>
+            {expanded === "sequential" && (
+              <div id="study-hub-sequential-panel">
+                <TopicList mode={mode} onSelect={(topic) => onSelect({ type: "sequential", topic })} />
+              </div>
+            )}
+          </li>
+
+          <li>
+            <button
+              type="button"
+              onClick={() => toggleSection("progress")}
+              aria-expanded={expanded === "progress"}
+              aria-controls="study-hub-progress-panel"
+              className={ROW_CLASSES}
+            >
+              Progress
+            </button>
+            {expanded === "progress" && (
+              <div
+                id="study-hub-progress-panel"
+                className="mt-2 rounded-[10px] border border-ink-82/10 px-4 py-3 font-sans text-[13px] text-ink-58"
+              >
+                Progress view — coming soon.
+              </div>
+            )}
+          </li>
         </ul>
       </div>
     </>
