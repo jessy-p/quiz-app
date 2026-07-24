@@ -154,12 +154,22 @@ components/
   AnswerState.tsx             # correct/wrong visual + aria-live announcement
   SecondaryActionsRow.tsx     # Reference / Teach Me / Double Check row
   ActionSheet.tsx             # shared bottom-sheet, 3 content variants
+  StudyModeProvider.tsx       # Context bridging the Server Component root layout to the Client Component question screen
+  StudyHubIcon.tsx            # fixed top-right icon, opens the Study Hub
+  StudyHub.tsx                # accordion shell — Random / Sequential / Progress
+  TopicList.tsx               # topic rows shown under Sequential
+  ProgressSummary.tsx         # per-topic coverage bars shown under Progress
 
 lib/
   selectNextQuestion.ts       # pure function — pool, history, bias, lastShownId -> next question
   useNextQuestion.ts          # client hook wrapping the above, touches localStorage
+  selectSequentialQuestion.ts # pure function — sorted topic questions + lastShownId -> next question, strict ID order
+  useSequentialQuestion.ts    # sibling hook to useNextQuestion, same shape, for Sequential mode
+  topics.ts                   # per-topic question counts + topic-slug humanizing, derived from the pool
+  computeProgress.ts          # pure function — pool + local attempt log -> per-topic correct/missed/not-attempted counts
+  bodyScrollLock.ts           # reference-counted body-scroll lock shared by ActionSheet and StudyHub
   config.ts                   # bias constant (default 0), other tunables
-  storage.ts                  # localStorage read/write for attempt log
+  storage.ts                  # localStorage read/write for attempt log, study mode, sequential cursors
   deviceToken.ts              # generates/persists the anti-abuse token
   backupSync.ts               # fire-and-forget POST to the Blob-backed API route
 
