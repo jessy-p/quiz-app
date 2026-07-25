@@ -1,0 +1,1118 @@
+[
+  {
+    "id": "ccaf-0001",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "In an agentic loop using the Messages API, which `stop_reason` value tells you the loop should continue and execute a tool?",
+    "options": [
+      "\"end_turn\"",
+      "\"stop_sequence\"",
+      "\"tool_use\"",
+      "\"max_tokens\""
+    ],
+    "correctIndex": 2,
+    "explanation": "\"tool_use\" means Claude wants to call one or more tools, so the loop should continue. \"end_turn\" means Claude has finished and the loop should terminate. \"max_tokens\" means the response was cut off by the token limit — it's not a tool request, it's a truncation signal. \"stop_sequence\" means a configured stop string was hit — also unrelated to tool requests.",
+    "references": [
+      "Anthropic: Messages API Reference"
+    ],
+    "teachMePrompt": "I just learned that `stop_reason` is the field that controls whether an agentic loop continues or terminates. Teach me the full mental model of agentic loop control: all the `stop_reason` values a production loop needs to handle (not just tool_use/end_turn), why deterministic signals are preferred over parsing model output, and common ways developers get loop termination wrong.",
+    "doubleCheckPrompt": "Is it accurate that in Anthropic's Messages API, `stop_reason` is the authoritative signal for controlling an agentic loop, with \"tool_use\" meaning continue and \"end_turn\" meaning stop? Are there other stop_reason values a production system should handle? Cite sources."
+  },
+  {
+    "id": "ccaf-0002",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "After a tool executes inside an agentic loop, what must happen before the next request is sent to Claude?",
+    "options": [
+      "The tool result should be discarded unless it errored",
+      "The tool result must be appended to the conversation history",
+      "Nothing — Claude retains it automatically",
+      "The tool result must be summarized first"
+    ],
+    "correctIndex": 1,
+    "explanation": "Tool results must be explicitly appended to history — the API is stateless, so Claude has no memory outside what's sent in the request. Summarizing first would lose specifics Claude may need to reason correctly. Discarding non-error results throws away information Claude needs to continue the task. And Claude doesn't \"retain\" anything between requests automatically — every prior turn, including tool results, must be present in the next request's history or it's as if it never happened.",
+    "references": [
+      "Anthropic: Messages API Reference"
+    ],
+    "teachMePrompt": "I just learned that tool results must be explicitly appended to conversation history in an agentic loop. Teach me the broader model of how conversation state works with stateless LLM APIs — why the model has no memory between calls, how multi-turn and tool-use conversations are reconstructed from history each time, and what commonly goes wrong when developers assume the model 'remembers' things.",
+    "doubleCheckPrompt": "Is it accurate that in Anthropic's Messages API, tool results must be manually appended to the conversation history for the model to use them in subsequent reasoning, since the API is stateless? Cite sources."
+  },
+  {
+    "id": "ccaf-0003",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What is 'model-driven decision-making' in an agentic system?",
+    "options": [
+      "A fixed order of tool calls set by the developer",
+      "Claude selecting which tool to call based on context",
+      "A tool-choice setting that forces a specific tool"
+    ],
+    "correctIndex": 1,
+    "explanation": "Model-driven decision-making means Claude reads the task and picks the appropriate tool itself, rather than following a hard-coded sequence. A fixed order set by the developer is the opposite — a pre-configured decision tree, not model-driven. Forcing a specific tool via a tool-choice setting removes the model's choice entirely, which also isn't model-driven decision-making.",
+    "references": [
+      "Anthropic: Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned the distinction between model-driven tool selection and fixed/pre-configured tool sequences in agentic systems. Teach me the broader tradeoff space here: when flexibility from model-driven selection is valuable, when deterministic fixed sequences or programmatic enforcement are preferred instead (e.g. for compliance-critical steps), and how these two approaches can be combined in one system.",
+    "doubleCheckPrompt": "Is it accurate that in agentic AI system design, 'model-driven decision-making' refers to the LLM selecting tools based on context, as opposed to a developer-defined fixed sequence? Is this a standard distinction used in agent architecture literature? Cite sources."
+  },
+  {
+    "id": "ccaf-0004",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A document-processing agent's loop checks whether the latest response contains a text block to decide the task is finished. It works for single-step tasks, but on multi-step tasks it sometimes stops after step one, even though Claude included a sentence alongside a tool call requesting the next step. What's the most reliable fix?",
+    "options": [
+      "Check `stop_reason` instead — \"tool_use\" means continue, \"end_turn\" means finished",
+      "Tell Claude never to include text alongside tool calls",
+      "Strip text content from responses so only tool calls remain",
+      "Raise the maximum number of loop iterations allowed"
+    ],
+    "correctIndex": 0,
+    "explanation": "Claude can return text and a tool_use block together, so checking for text presence is unreliable — `stop_reason` is deterministic. Stripping text removes useful context without fixing the detection logic. Instructing Claude to never include text is a probabilistic prompt fix, not a guarantee. Raising the iteration cap doesn't help since the loop isn't running out of iterations, it's exiting early on a false signal.",
+    "references": [
+      "Anthropic: Messages API Reference"
+    ],
+    "teachMePrompt": "I just learned that agentic loops should terminate based on `stop_reason` rather than checking for the presence of text in a response, because Claude can return text alongside a tool_use block. Teach me about the broader category of 'unreliable heuristics for loop control' in agentic systems — what other signals people mistakenly use, why they fail, and what the deterministic alternatives look like.",
+    "doubleCheckPrompt": "Is it true that Claude's Messages API can return a response containing both a text block and a tool_use block in the same turn, and that checking for text presence alone is therefore an unreliable way to detect task completion in an agentic loop? Cite sources."
+  },
+  {
+    "id": "ccaf-0005",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "An engineer notices their coding agent occasionally loops far longer than expected. As a fix, they hard-cap the loop at 8 iterations. Simple tasks now finish fine, but some genuinely complex refactors get cut off mid-way. What's the better approach?",
+    "options": [
+      "Keep the hard cap but raise it to 30",
+      "Remove the cap entirely",
+      "Swap the iteration cap for a wall-clock timeout instead",
+      "Rely on `stop_reason` as the primary signal, keeping a much higher cap only as a safety net"
+    ],
+    "correctIndex": 3,
+    "explanation": "An iteration cap used as the primary stopping mechanism is always wrong for some task — too low cuts off real work, too high wastes time on runaway loops. `stop_reason` should drive normal termination, with a cap only as a distant safety net. Just raising the number shifts the problem rather than fixing it. Removing the cap loses protection against a genuinely runaway loop. A wall-clock timeout has the same underlying flaw — it's still an arbitrary proxy standing in for the model's actual completion signal.",
+    "references": [
+      "Anthropic: Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that iteration caps should be a safety net, not the primary way an agentic loop decides when to stop — `stop_reason` should drive normal termination. Teach me the general pattern of 'safety nets vs primary control mechanisms' in distributed/agentic systems, with other examples beyond loop iteration limits.",
+    "doubleCheckPrompt": "Is it accurate that best practice for agentic loops using the Anthropic Messages API is to use `stop_reason` as the primary termination signal, with iteration caps serving only as a safety net rather than the main control mechanism? Cite sources."
+  },
+  {
+    "id": "ccaf-0006",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "In hub-and-spoke multi-agent architecture, how should two subagents exchange information?",
+    "options": [
+      "Only through the coordinator",
+      "Via a shared global memory store",
+      "Directly, if it's more efficient"
+    ],
+    "correctIndex": 0,
+    "explanation": "All communication flows through the coordinator — this centralizes observability, error handling, and control over what context each subagent receives, even if direct contact would technically be faster. A shared global memory store breaks that same centralization by letting subagents read state the coordinator never explicitly provided — this contradicts the isolation principle just as directly as unauthorized direct contact would.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that in hub-and-spoke multi-agent architecture, all communication must flow through the coordinator rather than directly between subagents. Teach me the broader reasoning behind centralized orchestration patterns — why observability, error handling, and information flow control matter enough to justify the added latency of routing everything through one hub.",
+    "doubleCheckPrompt": "Is it accurate that in hub-and-spoke multi-agent architectures, subagents are expected to communicate only through a central coordinator rather than directly with each other, and that this is the standard recommended pattern? Cite sources."
+  },
+  {
+    "id": "ccaf-0007",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What does the 'critical isolation principle' say about subagents in a multi-agent system?",
+    "options": [
+      "They share memory across separate invocations",
+      "They receive only what the coordinator explicitly includes in their prompt",
+      "They can query each other's prior results directly",
+      "They automatically inherit the coordinator's full conversation history"
+    ],
+    "correctIndex": 1,
+    "explanation": "Subagents have no automatic access to the coordinator's history or to other subagents' outputs, and no memory persists between invocations. Everything they need must be explicitly written into their prompt each time.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that subagents in a multi-agent system don't automatically inherit context or share memory between invocations. Teach me the broader implications of context isolation in agentic systems — how this affects prompt design, what failure modes it prevents, and where similar isolation principles show up in other distributed system designs.",
+    "doubleCheckPrompt": "Is it accurate that subagents spawned by a coordinator in an agentic system do not automatically inherit the coordinator's conversation history or share memory across separate invocations, and that context must be explicitly passed each time? Cite sources."
+  },
+  {
+    "id": "ccaf-0008",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "A multi-agent research report is thorough on the topics it covers but omits entire categories the user would have expected. Where should you look first for the root cause?",
+    "options": [
+      "The document analysis subagent's source selection",
+      "The coordinator's task decomposition",
+      "The web search subagent's query wording",
+      "The synthesis subagent's summarization logic"
+    ],
+    "correctIndex": 1,
+    "explanation": "If subagents did thorough work on what they were assigned but whole categories are missing, the coordinator never assigned those categories to anyone in the first place — subagents can't research topics they were never told to cover. A weak query from the web search subagent would produce shallow or missing results within its assigned topic, not missing categories entirely. A document analysis subagent's source selection issue would affect depth within its assigned scope, not cause whole unassigned categories to vanish. A synthesis subagent's summarization logic can only omit or compress what it received — it can't be the reason topics were never researched at all.",
+    "references": [
+      "Anthropic: Multi-Agent Research System Scenario"
+    ],
+    "teachMePrompt": "I just learned that when a multi-agent system's output has whole missing categories rather than shallow coverage, the root cause traces back to the coordinator's task decomposition, not the subagents. Teach me the general diagnostic principle of 'trace failures to their origin' in multi-agent systems — how to distinguish a decomposition failure from an execution failure when debugging.",
+    "doubleCheckPrompt": "In multi-agent AI research systems, is it a documented best practice to diagnose coverage gaps in a final report by first examining the coordinator's task decomposition rather than the individual subagents' execution? Cite sources."
+  },
+  {
+    "id": "ccaf-0009",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A coordinator invokes the same web-search subagent twice in one workflow — once for 'authentication vulnerabilities' and once for 'authorization vulnerabilities' — and the second call ends up duplicating part of the first search, unaware there was any overlap. What's the best fix?",
+    "options": [
+      "This is expected behavior and needs no fix",
+      "Give the subagent access to a shared memory store so it can check its own prior calls",
+      "Combine both topics into a single subagent call every time, regardless of scope",
+      "The coordinator should include the scope and relevant findings of the first call in the second call's prompt"
+    ],
+    "correctIndex": 3,
+    "explanation": "Subagents don't share memory between invocations, so duplication happens unless the coordinator explicitly tells the second call what the first one already covered. A shared memory store contradicts the isolation principle rather than working within it. Always merging calls loses the benefit of scoping distinct subtopics separately. Treating the duplication as fine wastes work and risks inconsistent results between the two calls.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that a coordinator must explicitly pass prior findings into a subagent's prompt to prevent duplicated work across separate invocations of the same subagent. Teach me the broader pattern of managing overlapping subtasks in multi-agent systems — how coordinators typically partition and track scope across multiple calls to the same subagent type.",
+    "doubleCheckPrompt": "Is it accurate that in agentic systems, a coordinator invoking the same subagent multiple times must explicitly pass context about prior invocations to avoid duplicated work, since the subagent has no memory of earlier calls? Cite sources."
+  },
+  {
+    "id": "ccaf-0010",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A coordinator routes every incoming query — no matter how trivial — through the full pipeline: web search, document analysis, and synthesis. A simple factual question like 'what year was the company founded' now takes three agent calls and noticeable latency. What should change?",
+    "options": [
+      "Nothing — always running the full pipeline maximizes thoroughness",
+      "Merge all three subagents into a single generalist agent",
+      "Skip synthesis specifically for any query under 10 words",
+      "The coordinator should dynamically select which subagents a given query actually needs"
+    ],
+    "correctIndex": 3,
+    "explanation": "Dynamic subagent selection is one of the coordinator's core responsibilities — analyzing query complexity and only invoking what's needed. Always running the full pipeline directly contradicts that responsibility: it adds two unnecessary agent calls and real latency to a query a single web search could answer. Merging subagents loses the benefit of specialization. Skipping synthesis based on word count is an arbitrary proxy, not an assessment of actual query complexity.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that a coordinator should dynamically select which subagents to invoke based on query complexity rather than always running the full pipeline. Teach me about the coordinator's broader responsibilities in multi-agent orchestration — dynamic selection, scope partitioning, iterative refinement, and centralized routing — and how they work together.",
+    "doubleCheckPrompt": "Is it accurate that in well-designed multi-agent orchestration systems, the coordinator is expected to dynamically select which subagents to invoke per query rather than always routing every request through the full available pipeline? Cite sources."
+  },
+  {
+    "id": "ccaf-0011",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What must be included in a coordinator's `allowedTools` for it to be able to spawn subagents at all?",
+    "options": [
+      "\"Task\" (or \"Agent\", its current name)",
+      "\"Delegate\"",
+      "\"Spawn\"",
+      "Nothing — it happens automatically"
+    ],
+    "correctIndex": 0,
+    "explanation": "The Task tool (renamed Agent in current Claude Code, with Task still working as an alias) is a hard gate — without it in allowedTools, the coordinator physically cannot invoke any subagent, no matter how the subagents themselves are defined. \"Delegate\" and \"Spawn\" aren't tool names the Agent SDK defines at all — including them in allowedTools would do nothing, since there's no matching tool to enable. And it doesn't \"happen automatically\" either — subagent spawning is gated behind this specific tool permission like any other tool call, not granted by default.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that a coordinator's allowedTools must include the Task (or Agent) tool for it to be able to spawn subagents at all. Teach me how tool permissioning works more broadly in the Claude Agent SDK — what other tools have this kind of hard-gate requirement, and how tool restriction scoping is typically designed for coordinators versus subagents.",
+    "doubleCheckPrompt": "Is it accurate that in the Claude Agent SDK, a coordinator agent must have the Task tool (now often called Agent) included in its allowedTools configuration in order to spawn any subagents at all? Cite sources."
+  },
+  {
+    "id": "ccaf-0012",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "An AgentDefinition specifies three things about a subagent. Which of these is NOT one of them?",
+    "options": [
+      "The system prompt containing the instructions the subagent follows",
+      "Tool restrictions scoped to what the subagent is allowed to access",
+      "A description of what the subagent does, used by the coordinator to decide when to invoke it",
+      "The coordinator's full conversation history"
+    ],
+    "correctIndex": 3,
+    "explanation": "AgentDefinition covers a description, a system prompt, and tool restrictions. The coordinator's conversation history is never automatically part of it — that's exactly the isolation principle in action; a subagent gets only what's explicitly written into its own prompt, not the coordinator's own message history.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned the three fields that make up an AgentDefinition for a subagent: description, system prompt, and tool restrictions. Teach me how each of these fields functions in practice — how the coordinator uses the description for selection, how tool restrictions get scoped per role, and how this ties back to the subagent isolation principle.",
+    "doubleCheckPrompt": "Is it accurate that in the Claude Agent SDK, an AgentDefinition for a subagent consists of a description, a system prompt, and tool restrictions — and that it does not include the coordinator's conversation history? Cite sources."
+  },
+  {
+    "id": "ccaf-0013",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What is `fork_session` used for?",
+    "options": [
+      "Blocking a tool call before it executes",
+      "Continuing the exact same line of investigation from where it left off",
+      "Creating independent branches from a shared analysis baseline for divergent exploration",
+      "Normalizing tool output into a consistent format"
+    ],
+    "correctIndex": 2,
+    "explanation": "fork_session branches off from a shared starting point so different approaches can be explored independently — each fork can't see the others' results. Continuing the same investigation is what `--resume` does instead of forking. \"Normalizing tool output into a consistent format\" and \"blocking a tool call before it executes\" both describe tool-execution-hook mechanisms entirely separate from session management — neither has anything to do with branching or continuing a session, so neither describes what fork_session does.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that fork_session creates independent branches from a shared baseline for exploring divergent approaches, as opposed to --resume which continues the same session. Teach me the broader set of session management tools available (resume, fork, fresh start with summary injection) and when each is the right choice.",
+    "doubleCheckPrompt": "Is it accurate that fork_session in Claude Code/Agent SDK creates an independent branch from a shared analysis baseline for exploring divergent approaches, and that this is distinct from resuming a session? Cite sources."
+  },
+  {
+    "id": "ccaf-0014",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A synthesis agent's report states several claims confidently but with zero citations, even though the web search and document analysis subagents both returned properly sourced findings. What's the most likely fix?",
+    "options": [
+      "Give the synthesis agent direct access to the search tool so it can look sources up itself",
+      "Ensure the coordinator passes structured findings, including source_url and document_name, rather than stripped content-only text",
+      "Rewrite the synthesis agent's system prompt to more strongly demand citations, e.g. \"Always include a source URL for every claim\"",
+      "Accept it — unsourced claims are an inherent limitation of synthesis agents that no amount of context passing can fix"
+    ],
+    "correctIndex": 1,
+    "explanation": "The synthesis agent can only cite sources it was actually given. If the coordinator passed content without structured metadata, no prompt tweak — even one explicitly demanding source URLs — fixes it, because the underlying information simply isn't in the subagent's context. Giving it direct tool access sidesteps the actual pipeline problem rather than fixing the context-passing gap. Treating this as an inherent, unfixable limitation is incorrect — it's a context-passing issue with a clear fix.",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that unsourced claims from a synthesis agent are usually caused by the coordinator stripping structured metadata before passing findings along, not by a flaw in the synthesis agent itself. Teach me how to design structured inter-agent data formats that separate content from metadata, and why this separation matters for attribution.",
+    "doubleCheckPrompt": "Is it accurate that when a synthesis agent in a multi-agent pipeline produces claims without source attribution, the root cause is typically that the coordinator passed content without structured source metadata, rather than a flaw in the synthesis agent's own prompt? Cite sources."
+  },
+  {
+    "id": "ccaf-0015",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A coordinator needs a web-search subagent and a document-analysis subagent to run for one request, and neither depends on the other's output. Currently, the coordinator waits for the full web-search response before even issuing the Task call for document-analysis. What's the recommended change?",
+    "options": [
+      "Merge both subagents into a single combined subagent",
+      "Emit both Task tool calls in a single coordinator response so they run in parallel",
+      "Use fork_session so each subagent runs on its own independent branch",
+      "Keep them sequential, since ordering guarantees more consistent results"
+    ],
+    "correctIndex": 1,
+    "explanation": "Independent subagent tasks should be spawned in parallel via multiple Task calls in one response — sequential spawning across separate turns just adds latency for no benefit. Merging the subagents loses their specialization. Sequential ordering isn't needed here since the tasks don't depend on each other, so it only costs time. fork_session solves a different problem (divergent exploration, not parallel independent work).",
+    "references": [
+      "Anthropic: Claude Agent SDK Overview"
+    ],
+    "teachMePrompt": "I just learned that independent subagent tasks should be spawned in parallel by emitting multiple Task tool calls in a single coordinator response, rather than sequentially across turns. Teach me about latency considerations in multi-agent orchestration more broadly — when parallel spawning helps, when it doesn't, and how this differs from fork_session's use case.",
+    "doubleCheckPrompt": "Is it accurate that in the Claude Agent SDK, independent subagent tasks should be spawned in parallel using multiple Task tool calls within a single coordinator response, rather than sequentially, to reduce latency? Cite sources."
+  },
+  {
+    "id": "ccaf-0016",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which of these is an example of programmatic enforcement rather than prompt-based guidance?",
+    "options": [
+      "\"Always verify identity before refunds\" written plainly into the system prompt as a standing instruction",
+      "A stronger warning added to the system prompt about compliance risk, emphasizing the consequences of skipping verification",
+      "A code-level gate that blocks process_refund until get_customer returns a verified ID",
+      "Few-shot examples demonstrating the correct verification-then-refund order across several sample conversations"
+    ],
+    "correctIndex": 2,
+    "explanation": "A code-level gate physically prevents the tool call regardless of what the model decides — that's deterministic enforcement. The other three options are all still prompt-based: stronger wording, a standing plain instruction, and few-shot examples across sample conversations all improve probability but never reach 100%, because the model remains free to disregard any of them.",
+    "references": [
+      "Anthropic: Customer Support Resolution Agent Scenario"
+    ],
+    "teachMePrompt": "I just learned the distinction between programmatic enforcement (code-level gates) and prompt-based guidance (instructions, few-shot examples) in agentic systems. Teach me the full enforcement spectrum and the decision rule for when each is appropriate — especially for financial, security, and compliance operations.",
+    "doubleCheckPrompt": "Is it accurate that a code-level prerequisite gate blocking a tool call until a precondition is met is considered 'programmatic enforcement' and provides deterministic guarantees that prompt-based instructions cannot match? Cite sources."
+  },
+  {
+    "id": "ccaf-0017",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "According to the standard decision rule for enforcement design, when is prompt-based guidance (rather than a programmatic gate) considered acceptable?",
+    "options": [
+      "Security operations like identity verification",
+      "Low-stakes preferences like formatting or style",
+      "Financial operations like refunds and transfers",
+      "Compliance and regulatory operations"
+    ],
+    "correctIndex": 1,
+    "explanation": "Financial, security, and compliance operations all carry real-world consequences from a single failure, so they require deterministic programmatic enforcement. Formatting and style preferences carry no such risk, so probabilistic prompt-based guidance is fine there.",
+    "references": [
+      "Anthropic: Customer Support Resolution Agent Scenario"
+    ],
+    "teachMePrompt": "I just learned the decision rule for choosing prompt-based guidance versus programmatic enforcement in agent design: financial/security/compliance operations need enforcement, low-stakes preferences don't. Teach me how to apply this decision rule across other domains I might build agents for, with examples beyond customer support.",
+    "doubleCheckPrompt": "Is it a documented best practice in agentic system design that financial, security, and compliance operations require deterministic programmatic enforcement, while low-stakes preferences like formatting can rely on prompt-based guidance alone? Cite sources."
+  },
+  {
+    "id": "ccaf-0018",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "A structured handoff summary to a human agent must be self-contained since the human can't see the transcript. Which of the following is NOT one of the required fields?",
+    "options": [
+      "A recommended action describing what the human agent should do next",
+      "Root cause analysis explaining the agent's assessment of the underlying issue",
+      "The customer ID needed to pull up the account",
+      "The agent's numeric confidence score as a percentage"
+    ],
+    "correctIndex": 3,
+    "explanation": "The required fields are customer ID, conversation summary, root cause analysis, refund amount (if applicable), and recommended action. A numeric confidence percentage isn't part of the specified handoff structure — the protocol calls for the agent's reasoning and a concrete next step, not a self-reported confidence number.",
+    "references": [
+      "Anthropic: Customer Support Resolution Agent Scenario"
+    ],
+    "teachMePrompt": "I just learned the required fields for a structured handoff summary from an AI agent to a human agent — customer ID, conversation summary, root cause analysis, refund amount if applicable, and recommended action. Teach me why the constraint that the human agent has no transcript access shapes what a good handoff protocol needs to include.",
+    "doubleCheckPrompt": "Is it accurate that a well-designed structured handoff summary from an AI support agent to a human agent should include customer ID, conversation summary, root cause analysis, financial amounts if relevant, and a recommended action, given the human has no access to the original conversation transcript? Cite sources."
+  },
+  {
+    "id": "ccaf-0019",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A customer submits one message bundling three separate issues: a return, a shipping address update, and a loyalty points question. What's the correct way for the agent to handle this?",
+    "options": [
+      "Escalate the entire request to a human immediately, since it has multiple parts",
+      "Handle each issue as its own separate conversation, one fully completed before starting the next",
+      "Decompose into the three items, investigate each in parallel using shared context, then synthesize one unified response",
+      "Address only the first issue mentioned and let the customer follow up separately for the rest"
+    ],
+    "correctIndex": 2,
+    "explanation": "Multi-concern requests should be decomposed, investigated in parallel (since shared account context applies to all three), and resolved with one unified response. Addressing only the first issue drops the others entirely. Fully sequential handling wastes the shared context and adds unnecessary friction. Escalating automatically ignores that agents are expected to handle straightforward multi-part requests themselves.",
+    "references": [
+      "Anthropic: Customer Support Resolution Agent Scenario"
+    ],
+    "teachMePrompt": "I just learned that multi-concern customer requests should be decomposed into distinct items, investigated in parallel with shared context, and resolved with one unified response. Teach me how this pattern compares to fixed sequential pipelines and dynamic decomposition from task decomposition strategy more generally.",
+    "doubleCheckPrompt": "Is it a recommended pattern in customer support agent design to decompose a multi-part customer request into distinct items, investigate them in parallel using shared account context, and then synthesize a single unified resolution? Cite sources."
+  },
+  {
+    "id": "ccaf-0020",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A support agent's identity-verification-before-refund policy is enforced purely through system prompt wording and measurably fails in roughly 1 out of every 12 cases. The proposed fix is adding three few-shot examples demonstrating the correct order. Will this fully close the compliance gap?",
+    "options": [
+      "No, the refund tool should just be removed from the agent entirely",
+      "No — few-shot examples improve accuracy but stay probabilistic, so a programmatic gate is still needed for guaranteed enforcement",
+      "Yes, as long as the examples are detailed and specific enough",
+      "Yes, few-shot examples make the model's behavior fully deterministic"
+    ],
+    "correctIndex": 1,
+    "explanation": "Few-shot examples can meaningfully raise accuracy but never eliminate the failure rate — the model remains probabilistic no matter how detailed or specific the examples are, so even \"detailed enough\" examples leave a non-zero failure rate. The claim that few-shot examples make behavior \"fully deterministic\" is flatly false — nothing about adding examples to a prompt changes the model's fundamentally probabilistic nature. For a compliance requirement that must hold 100% of the time, only a programmatic prerequisite gate provides that guarantee. Removing the tool entirely isn't a proportionate response to a fixable workflow ordering problem.",
+    "references": [
+      "Anthropic: Customer Support Resolution Agent Scenario"
+    ],
+    "teachMePrompt": "I just learned that few-shot examples improve but don't eliminate the failure rate of a prompt-enforced policy, and that a measured ~8% failure rate requires a programmatic gate rather than better prompting. Teach me why probabilistic model behavior can't be prompted into a deterministic guarantee, and what the actual ceiling looks like for prompt-only compliance approaches.",
+    "doubleCheckPrompt": "Is it accurate that few-shot examples in a system prompt can reduce but not eliminate a model's failure rate on a workflow-ordering compliance requirement, and that only code-level enforcement (a prerequisite gate) can guarantee 100% compliance? Cite sources."
+  },
+  {
+    "id": "ccaf-0021",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which hook type runs before a tool executes and can block or redirect the call entirely?",
+    "options": [
+      "PostToolUse",
+      "SubagentStop",
+      "SubagentStart",
+      "PreToolUse"
+    ],
+    "correctIndex": 3,
+    "explanation": "PreToolUse intercepts the outgoing tool call before it runs, so it can block or redirect it — the tool never executes if the hook decides to stop it. PostToolUse, by contrast, only runs after execution, so it can't block anything. SubagentStart fires when a subagent is spawned — it's a hook point for logging or validating the invocation, not for intercepting a tool call. SubagentStop fires when a subagent finishes and returns results to the coordinator — again a different lifecycle event, not a tool-call interception point.",
+    "references": [
+      "Anthropic: Claude Agent SDK Hooks Documentation"
+    ],
+    "teachMePrompt": "I just learned that PreToolUse hooks run before a tool executes and can block or redirect the call. Teach me the full picture of Agent SDK hook types — PreToolUse, PostToolUse, and subagent lifecycle hooks — and how each fits into the tool execution lifecycle.",
+    "doubleCheckPrompt": "Is it accurate that in the Claude Agent SDK, PreToolUse hooks run before a tool call executes and are capable of blocking or redirecting that call before it runs? Cite sources."
+  },
+  {
+    "id": "ccaf-0022",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "A team wants to convert timestamps from three MCP tools (Unix epoch, ISO 8601, and DD/MM/YYYY) into one consistent format before the model ever sees them. Which mechanism fits this use case?",
+    "options": [
+      "PostToolUse hook",
+      "A routing classifier",
+      "A prerequisite gate",
+      "PreToolUse hook"
+    ],
+    "correctIndex": 0,
+    "explanation": "PostToolUse hooks run after a tool executes but before the model processes the result, making them the right place to normalize heterogeneous output formats into something consistent. A routing classifier decides which agent or pipeline handles a request in the first place — it has nothing to do with transforming a tool's output format. A prerequisite gate and a PreToolUse hook both operate before execution and are for blocking/policy decisions, not transforming data that's already been returned.",
+    "references": [
+      "Anthropic: Claude Agent SDK Hooks Documentation"
+    ],
+    "teachMePrompt": "I just learned that PostToolUse hooks are the right mechanism for normalizing inconsistent data formats returned by different tools, since they run after execution but before the model processes the result. Teach me more about data normalization patterns in agentic pipelines and why leaving normalization to the model itself tends to produce inconsistent results.",
+    "doubleCheckPrompt": "Is it accurate that PostToolUse hooks in the Claude Agent SDK are the recommended mechanism for normalizing heterogeneous tool output formats (like differing date formats) before the model processes the results? Cite sources."
+  },
+  {
+    "id": "ccaf-0023",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "An agent occasionally executes international fund transfers before the required AML check completes, roughly 1 in 20 times, despite clear prompt instructions to check first. The team proposes a PostToolUse hook that flags any transfer completed without a prior AML pass for later manual review. Does this satisfy a 100% compliance requirement?",
+    "options": [
+      "No, but a PostToolUse hook that automatically reverses the transfer once flagged would be sufficient",
+      "Yes, flagging after the fact is functionally equivalent to preventing it",
+      "Yes, as long as the review happens within 24 hours",
+      "No — by the time a PostToolUse hook fires, the non-compliant transfer has already executed; a PreToolUse hook blocking the call is what's needed"
+    ],
+    "correctIndex": 3,
+    "explanation": "A PostToolUse hook only observes after the fact — the transfer has already happened by the time it fires, which doesn't satisfy a requirement that no transfer skip AML checks. A PreToolUse hook blocking `transfer_funds` until the AML check passes is the only way to guarantee the transfer never executes non-compliantly. A bounded review window doesn't change the fact that the transfer already executed non-compliantly before anyone looked at it — timeliness of the review is irrelevant to whether the original execution was compliant. Flagging isn't equivalent to preventing — detecting a violation after it happened is a different thing from never letting it happen. Even automatically reversing the transfer afterward doesn't change that a non-compliant transfer executed at least momentarily — a true 100% requirement means the transfer never executes non-compliantly in the first place, not that it gets undone afterward.",
+    "references": [
+      "Anthropic: Claude Agent SDK Hooks Documentation"
+    ],
+    "teachMePrompt": "I just learned that a PostToolUse hook cannot satisfy a 100% pre-execution compliance requirement because it only observes after the tool has already run — a PreToolUse hook is needed to actually block non-compliant calls. Teach me how to reason about which hook direction to use for a given compliance or safety requirement in general.",
+    "doubleCheckPrompt": "Is it accurate that for a compliance requirement demanding zero non-compliant transactions, a PostToolUse hook (which fires after execution) is insufficient, and a PreToolUse hook (which fires before execution and can block the call) is required instead? Cite sources."
+  },
+  {
+    "id": "ccaf-0024",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A team wants refunds above $500 to always route to a human approver with zero exceptions. They're deciding between reinforcing the system prompt with a stronger warning, or writing a PreToolUse hook. Which should they choose, and why?",
+    "options": [
+      "The stronger system prompt, since it's simpler to write and maintain than a code-level hook over time",
+      "Either works equally well, since a strongly worded system prompt effectively intercepts the refund the same way code does",
+      "The PreToolUse hook, since only code-level interception guarantees the refund is blocked before executing, regardless of what the model decides",
+      "A PostToolUse hook that automatically reverses any refund found to be over $500 after it has already processed"
+    ],
+    "correctIndex": 2,
+    "explanation": "A PreToolUse hook gives a hard, deterministic guarantee that the refund never executes above the threshold without approval — the model's decision is irrelevant because the gate sits in front of it. A system prompt doesn't actually intercept anything — it's an instruction the model can fail to follow, not a mechanism that blocks a call the way code does, so it never reaches zero exceptions. Being easier to maintain doesn't matter if the underlying mechanism can't guarantee the outcome. A PostToolUse hook that reverses the refund after the fact still lets the non-compliant action occur first, which fails a 'zero exceptions' requirement — reversal isn't prevention.",
+    "references": [
+      "Anthropic: Claude Agent SDK Hooks Documentation"
+    ],
+    "teachMePrompt": "I just learned that a zero-exceptions policy requirement (like refund approval thresholds) needs a PreToolUse hook rather than prompt reinforcement, because only pre-execution interception guarantees the action never happens without meeting the condition. Teach me the general decision framework for hooks vs. prompts based on the consequence of a single failure.",
+    "doubleCheckPrompt": "Is it accurate that for a zero-exception policy (e.g. all refunds above a dollar threshold must be human-approved), a PreToolUse hook provides a deterministic guarantee that prompt-based instructions cannot match? Cite sources."
+  },
+  {
+    "id": "ccaf-0025",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which decomposition pattern best fits a task with a fully known, predictable set of steps, like a compliance document checklist?",
+    "options": [
+      "fork_session",
+      "Attention dilution mitigation",
+      "Fixed sequential pipeline",
+      "Dynamic adaptive decomposition"
+    ],
+    "correctIndex": 2,
+    "explanation": "Fixed sequential pipelines suit predictable, structured tasks where the steps are known in advance — they trade adaptability for consistency and easy debugging, which fits a checklist-style task well. Dynamic adaptive decomposition is for open-ended tasks where the scope isn't known upfront — overkill and less predictable for a task whose steps are already fully known. fork_session is a session-branching mechanism for comparing divergent approaches, not a decomposition pattern at all. Attention dilution mitigation (multi-pass architecture) is a fix for processing too many items in one pass, not a way to choose between decomposition strategies.",
+    "references": [
+      "Anthropic: Claude Code in Action"
+    ],
+    "teachMePrompt": "I just learned that fixed sequential pipelines are best suited for predictable, structured tasks with known steps. Teach me the full comparison between fixed sequential pipelines and dynamic adaptive decomposition, including their respective advantages and limitations.",
+    "doubleCheckPrompt": "Is it accurate that fixed sequential pipelines (prompt chaining) are considered the better task decomposition pattern for predictable, structured tasks with steps known in advance, compared to dynamic adaptive decomposition? Cite sources."
+  },
+  {
+    "id": "ccaf-0026",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which pattern best fits exploring an unfamiliar legacy codebase where the scope of issues isn't known upfront?",
+    "options": [
+      "PostToolUse normalization",
+      "Dynamic adaptive decomposition",
+      "Fixed sequential pipeline",
+      "A single-pass review"
+    ],
+    "correctIndex": 1,
+    "explanation": "Dynamic adaptive decomposition generates and adjusts subtasks as the agent learns more, which suits open-ended investigation where the full scope isn't known at the start. A single-pass review is exactly the setup that causes attention dilution on a task this open-ended — it's a processing choice, not a decomposition pattern, and doesn't address the unknown scope. A fixed sequential pipeline can't adapt to unexpected findings — the wrong fit when dependencies and issues emerge mid-investigation, which is the norm in legacy code. PostToolUse normalization is an unrelated hook mechanism for cleaning up tool output formats, not a decomposition pattern.",
+    "references": [
+      "Anthropic: Claude Code in Action"
+    ],
+    "teachMePrompt": "I just learned that dynamic adaptive decomposition is best suited for open-ended investigation tasks like legacy codebase exploration, where the agent adapts its plan as it discovers new information. Teach me examples of other task types that benefit from this pattern versus fixed pipelines.",
+    "doubleCheckPrompt": "Is it accurate that dynamic adaptive decomposition — where an agent's plan evolves based on what it discovers during execution — is considered the better approach for open-ended tasks like legacy codebase exploration, compared to a fixed sequential pipeline? Cite sources."
+  },
+  {
+    "id": "ccaf-0027",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What is the 'attention dilution' problem in agentic task processing?",
+    "options": [
+      "Tool results silently overwriting each other in memory",
+      "The model running out of context window space entirely",
+      "Processing too many items in a single pass, causing inconsistent depth of analysis across items",
+      "The model forgetting its system prompt over a long conversation"
+    ],
+    "correctIndex": 2,
+    "explanation": "Attention dilution happens when an agent handles too many items at once — early items get disproportionate attention while later ones get skimmed, producing inconsistent depth. Tool results silently overwriting each other in memory isn't a documented failure mode here and doesn't match the symptom (inconsistent depth across items, not lost or corrupted data). The model forgetting its system prompt describes an unrelated failure mode (instruction drift over a long conversation), not degrading analysis depth across a batch of items. Running out of context window space would cause an outright failure or truncation, not the gradual, inconsistent shallowing attention dilution produces.",
+    "references": [
+      "Anthropic: Claude Code in Action"
+    ],
+    "teachMePrompt": "I just learned that attention dilution is the phenomenon where processing too many items in a single agentic pass produces inconsistent analysis depth across those items. Teach me the symptoms that reveal this problem and why the fix is architectural (multi-pass) rather than a model or context-size upgrade.",
+    "doubleCheckPrompt": "Is 'attention dilution' — where an LLM agent's analysis quality degrades across items when too many items are processed in one pass — a documented and recognized failure mode in agentic system design? Cite sources."
+  },
+  {
+    "id": "ccaf-0028",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A single review pass across 20 files gives thorough, detailed feedback on the first several files, then progressively shallower feedback on the rest — and even approves a pattern in one file that it had flagged as a bug in an earlier file. The team's first instinct is to switch to a model with a much larger context window. Will that fix it?",
+    "options": [
+      "No — this is a structural attention-allocation problem, best solved with per-item passes plus a cross-item integration pass, not more context capacity",
+      "Yes, but only if paired with a stronger prompt",
+      "Yes, since the issue is the model running out of room to hold all 20 files at once",
+      "No, the fix is to permanently cap all future reviews at 5 files"
+    ],
+    "correctIndex": 0,
+    "explanation": "Attention dilution is architectural, not a capacity limit — a bigger context window doesn't guarantee even attention across all 20 files, it just means they all technically fit. The proven fix is multi-pass architecture: individual per-file passes for consistent depth, plus a separate cross-file pass for issues spanning files. Permanently capping file count sacrifices real work rather than fixing the structural issue, and a stronger prompt alone doesn't solve an attention-allocation problem either.",
+    "references": [
+      "Anthropic: Claude Code in Action"
+    ],
+    "teachMePrompt": "I just learned that attention dilution in a large-batch review isn't solved by a bigger context window — it needs a structural fix (per-item passes plus a cross-item integration pass). Teach me why increasing context capacity doesn't inherently fix uneven attention allocation, and how multi-pass architecture actually addresses the root cause.",
+    "doubleCheckPrompt": "Is it accurate that increasing an LLM's context window size does not reliably fix the 'attention dilution' problem (inconsistent analysis depth across many items processed in one pass), and that a multi-pass architectural approach is the recommended fix instead? Cite sources."
+  },
+  {
+    "id": "ccaf-0029",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A team batches their 40-file codebase review into 4 batches of 10 files, giving each batch its own dedicated review pass. Feedback within each batch is now consistently detailed. However, a naming convention inconsistency spanning files in batch 1 and batch 3 is never caught. What's missing?",
+    "options": [
+      "A dedicated cross-item integration pass that specifically checks for issues spanning across all files or batches",
+      "More files should be included per batch",
+      "A larger underlying model",
+      "Nothing — batching alone fully solves attention dilution"
+    ],
+    "correctIndex": 0,
+    "explanation": "Batching reduces attention dilution within each batch, but without a separate cross-item integration pass, issues that span across batches — like inconsistent naming conventions — go undetected, since no single pass ever looks at all the files together. Adding more files per batch would reintroduce the original dilution problem; a bigger model doesn't add a cross-batch view either.",
+    "references": [
+      "Anthropic: Claude Code in Action"
+    ],
+    "teachMePrompt": "I just learned that batching alone reduces attention dilution within each batch but still misses cross-batch or cross-file issues without a dedicated integration pass. Teach me the full multi-pass architecture pattern — per-item passes plus a cross-item integration pass — and why both layers are necessary together.",
+    "doubleCheckPrompt": "Is it accurate that batching items into smaller groups for review reduces attention dilution within each batch, but still requires a separate cross-batch or cross-item integration pass to catch issues spanning multiple batches? Cite sources."
+  },
+  {
+    "id": "ccaf-0030",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which session management option should you use to compare two different refactoring strategies starting from the same completed codebase analysis?",
+    "options": [
+      "--resume",
+      "A PreToolUse hook",
+      "fork_session",
+      "A fresh start with no injected context"
+    ],
+    "correctIndex": 2,
+    "explanation": "fork_session creates independent branches from a shared baseline specifically for exploring divergent approaches — exactly the comparing-two-strategies use case. A PreToolUse hook is an unrelated mechanism for gating individual tool calls, not a session management option at all. --resume just continues one line of investigation rather than branching it — useful for picking up where you left off, not for comparing two directions at once. A fresh start with no injected context would lose the completed codebase analysis entirely — you'd be starting the comparison from zero rather than from the shared baseline the comparison actually needs.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that fork_session is the right tool for comparing divergent approaches (like two refactoring strategies) from a shared analysis baseline. Teach me the full decision matrix across resume, fork_session, and fresh start with summary injection.",
+    "doubleCheckPrompt": "Is it accurate that fork_session in Claude Code is the recommended tool for exploring two divergent approaches (like comparing refactoring strategies) starting from a shared prior analysis, as opposed to using --resume? Cite sources."
+  },
+  {
+    "id": "ccaf-0031",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "A developer wants to resume their work on a codebase the ordinary way — continuing the previous session as-is — after files have changed since that session ended. Which session option, used this way, risks the 'stale context problem'?",
+    "options": [
+      "--resume",
+      "A PostToolUse hook",
+      "Fresh start with summary injection",
+      "fork_session"
+    ],
+    "correctIndex": 0,
+    "explanation": "--resume restores the entire conversation history, including old tool results — if files have since changed, those stale results remain in context and can lead to contradictory advice. This is the option's ordinary failure mode: it's built to restore everything, stale or not. fork_session also inherits whatever's already in the session it branches from, so forking from an already-stale session carries the same risk — but fork_session's own purpose is comparing divergent approaches from a shared baseline, not resuming after changes, so it doesn't apply here at all — forking isn't 'continuing the session as-is,' it's a different operation entirely. Fresh start with summary injection avoids the problem entirely, since it discards stale tool results by design. A PostToolUse hook is an unrelated tool-execution mechanism, not a session management option.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that resuming a session (--resume) after files have changed risks the stale context problem, because old tool results remain in the restored conversation history. Teach me why fresh start with summary injection avoids this issue, and what a good injected summary looks like.",
+    "doubleCheckPrompt": "Is it accurate that resuming a Claude Code session with --resume after underlying files have changed can lead to a 'stale context problem', where the model reasons from outdated cached tool results still present in the conversation history? Cite sources."
+  },
+  {
+    "id": "ccaf-0032",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Only 3 of 50 files in a codebase changed since the last session. What does 'targeted re-analysis' mean in this context?",
+    "options": [
+      "Re-analyze only the 3 changed files, relying on the injected summary for everything else",
+      "Fork the session once per changed file",
+      "Re-analyze all 50 files from scratch to be safe",
+      "Skip re-analysis entirely and trust the previous results"
+    ],
+    "correctIndex": 0,
+    "explanation": "Targeted re-analysis means informing the agent about specifically which files changed and having it re-analyze only those, while the injected summary covers everything unchanged. Forking once per changed file misapplies fork_session — that mechanism is for exploring divergent approaches to the same problem, not for scoping which files to re-read; it would just create disconnected branches, not a re-analysis of the changed files within one coherent session. Skipping re-analysis entirely ignores the actual changes that were made. Re-analyzing all 50 files from scratch is exactly the full re-exploration that targeted re-analysis exists to avoid.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that targeted re-analysis means re-analyzing only the specific files that changed, relying on an injected summary for everything unchanged, rather than doing full re-exploration. Teach me how to structure a good summary-plus-changed-files prompt for this scenario.",
+    "doubleCheckPrompt": "Is it accurate that when only a small subset of files in a large codebase have changed, the recommended approach is 'targeted re-analysis' of just those files combined with a summary of prior findings, rather than full re-exploration of the entire codebase? Cite sources."
+  },
+  {
+    "id": "ccaf-0033",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A developer resumes a coding session after fixing three bugs identified the day before. The agent's advice references code that was already fixed, and when asked directly about one file, gives an answer that contradicts itself within the same response. What's happening, and what's the best fix?",
+    "options": [
+      "The resumed session still contains the old, pre-fix tool results in its history — start a fresh session with a summary of prior findings plus a note on which files changed",
+      "Use fork_session to branch off cleanly from the current stale session",
+      "Nothing is wrong; just ask the agent to double-check its own answer",
+      "Resume again and simply tell the agent that the three files are already fixed"
+    ],
+    "correctIndex": 0,
+    "explanation": "This is the stale context problem: --resume restored old tool results from before the fixes, and the model is reasoning from both the stale and current data at once, producing contradictions. A fresh session with an injected summary and a note on the 3 changed files clears the stale results while preserving prior knowledge. Simply resuming again and telling the agent the files are fixed is the documented naive fix — it helps, but the old stale tool results are still sitting in the conversation history and can still influence reasoning on tangential points. fork_session would just inherit the same stale data rather than fixing it, since a fork carries over whatever's already in the session it branches from. Asking the agent to self-correct doesn't remove the stale tool results still sitting in its context — it has no way to know which of its own claims came from stale vs. fresh data.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that contradictory advice after resuming a session, following file changes, is the classic 'stale context problem' — and that fork_session doesn't fix it because it inherits the same stale history. Teach me why a fresh session with summary injection is structurally different from both resume and fork in this situation.",
+    "doubleCheckPrompt": "Is it accurate that fork_session inherits the same stale tool results as the session it branches from, meaning it does not resolve the stale context problem, and that a fresh session with summary injection is needed instead? Cite sources."
+  },
+  {
+    "id": "ccaf-0034",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A long-running session has accumulated dozens of largely irrelevant tool calls over several hours, and the agent's responses have started referencing outdated or tangential details. No files have changed. What's the best move?",
+    "options": [
+      "Delete the session and start with zero context, discarding all prior findings that took time to build",
+      "Keep using --resume indefinitely, since no files have changed and the history still seems relevant",
+      "fork_session, to branch away from the clutter into a cleaner-feeling copy",
+      "Fresh start with a curated summary injection, since degraded/cluttered context benefits from a clean baseline even without file changes"
+    ],
+    "correctIndex": 3,
+    "explanation": "Fresh start with summary injection isn't only for stale file changes — it also applies when a long session's context has degraded from accumulated clutter. A curated summary preserves the useful findings while dropping the irrelevant noise. --resume would keep dragging the clutter forward regardless of how relevant the history still feels. fork_session still branches from the same cluttered history rather than cleaning it — branching doesn't remove clutter, it just copies it. Discarding everything and starting from zero throws away genuinely useful prior findings unnecessarily.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that fresh start with summary injection is appropriate not just for stale file changes but also for long sessions where context has degraded from accumulated clutter. Teach me how to recognize context degradation as distinct from stale context, and how a curated summary should differ between the two cases.",
+    "doubleCheckPrompt": "Is it accurate that a curated summary injection is recommended when a long-running agent session's context has become cluttered with irrelevant history, even in cases where no underlying files have changed? Cite sources."
+  },
+  {
+    "id": "ccaf-0035",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What is the primary mechanism an LLM uses to decide which tool to call?",
+    "options": [
+      "The order tools appear in the API request",
+      "The length of the tool's name",
+      "The number of parameters a tool defines",
+      "The tool's description"
+    ],
+    "correctIndex": 3,
+    "explanation": "Tool descriptions are the primary selection mechanism — a production-grade description covers what the tool does, expected inputs, example queries, edge cases, and boundaries versus similar tools. The order tools appear in the request isn't a selection factor at all; the model reads all provided tools regardless of position. Parameter count doesn't make a tool more or less likely to be picked — selection is driven by what the description says, not how complex the schema is. Name length is an even more superficial signal with no bearing on how the model actually decides between tools.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned that tool descriptions are the primary mechanism an LLM uses to decide which tool to call, not just supplementary metadata. Teach me what makes a production-grade tool description effective — the specific elements it should cover and why each one matters for selection accuracy.",
+    "doubleCheckPrompt": "Is it accurate that in Claude's tool use system, the tool's description field is the primary signal the model uses to decide which tool to call among multiple options? Cite sources."
+  },
+  {
+    "id": "ccaf-0036",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Two tools — get_customer (\"Retrieves customer information\") and lookup_order (\"Retrieves order details\") — keep getting confused for each other. What's the most effective first fix?",
+    "options": [
+      "Add few-shot examples to the system prompt",
+      "Expand both descriptions with inputs, example queries, edge cases, and explicit boundaries",
+      "Consolidate the two tools into one",
+      "Build a routing classifier to pre-select the correct tool"
+    ],
+    "correctIndex": 1,
+    "explanation": "Expanding minimal descriptions is the low-effort, high-leverage fix that addresses the actual root cause — vague descriptions. Few-shot examples add token overhead without fixing the underlying ambiguity. A routing classifier is over-engineered as a first step and bypasses the model's natural language understanding. Consolidation is a valid longer-term option but requires more effort than simply improving the descriptions.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned that when two tools cause selection confusion (the 'misrouting problem'), expanding their descriptions is the recommended first fix over few-shot examples, routing classifiers, or consolidation. Teach me why the exam favors low-effort, high-leverage fixes here, and how to write a description detailed enough to resolve ambiguity.",
+    "doubleCheckPrompt": "Is it accurate that when two similarly-described tools cause an LLM to misroute requests between them, expanding and clarifying their descriptions is generally recommended as the first fix, ahead of building a routing classifier or adding few-shot examples? Cite sources."
+  },
+  {
+    "id": "ccaf-0037",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "When should a broad, generic tool like `analyse_document` be split into multiple purpose-specific tools?",
+    "options": [
+      "Only when two engineers on the team openly disagree about what the tool's intended use actually is, and can't resolve it in code review",
+      "Generic tools are usually preferable to purpose-specific ones, since splitting reduces the flexibility a broad tool provides",
+      "When its broad responsibility makes its purpose and contract ambiguous — e.g. splitting into extract_data_points, summarise_content, and verify_claim_against_source"
+    ],
+    "correctIndex": 2,
+    "explanation": "Tool splitting is warranted when a generic tool's broad responsibility creates ambiguity about what it actually does — splitting into narrow, purpose-specific tools with defined input/output contracts resolves that. Engineers disagreeing about a tool's use, even if they can't resolve it in review, can be a symptom of that ambiguity, but disagreement itself isn't the criterion — the tool could be genuinely ambiguous with full team agreement, or genuinely fine despite an unresolved style disagreement. Preferring generic tools for their flexibility gets the tradeoff backwards: ambiguity is exactly the problem splitting solves, and a tool covering too much ground actively makes selection harder, not more flexible, regardless of how the preference is phrased.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned that generic, broad-responsibility tools should be split into purpose-specific tools with clear input/output contracts when their scope creates ambiguity. Teach me how to recognize when a tool has become too generic, and how to design the split so each resulting tool has a narrow, unambiguous purpose.",
+    "doubleCheckPrompt": "Is it a recommended practice in tool design for LLM agents to split an overly generic tool (with broad, ambiguous responsibilities) into multiple narrow, purpose-specific tools? Cite sources."
+  },
+  {
+    "id": "ccaf-0038",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A system prompt includes the instruction 'always check customer details before proceeding.' After the team significantly improves the get_customer and lookup_order tool descriptions, the model still frequently calls get_customer for order-status questions. What's the most likely explanation?",
+    "options": [
+      "The system prompt's keyword-sensitive instruction is creating an association that overrides the descriptions — the prompt itself needs review",
+      "The description improvements weren't detailed enough; add even more detail",
+      "Nothing more can be done at the description level — consolidate the two tools instead",
+      "The model has an underlying bug and needs a routing classifier layered in instead"
+    ],
+    "correctIndex": 0,
+    "explanation": "System prompt wording can create unintended tool associations that override otherwise well-written descriptions — a phrase like 'always check customer details' can bias the model toward get_customer regardless of how clear the tool boundaries are. Simply adding more description detail won't fix an association rooted in the system prompt, since the descriptions were already 'significantly improved' in the scenario — the bottleneck has moved elsewhere. A routing classifier addresses the wrong layer of the problem entirely; it doesn't touch the system prompt text that's actually causing the bias. Consolidating the tools removes the distinction altogether, which is a much bigger change than necessary for what's really just a prompt-wording conflict.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned that keyword-sensitive system prompt instructions can create tool associations that override well-written tool descriptions. Teach me how to audit a system prompt for these unintended associations, and why this check matters specifically after updating tool descriptions.",
+    "doubleCheckPrompt": "Is it accurate that wording in an LLM's system prompt can create unintended associations with a specific tool, strong enough to override that tool's own description and cause consistent misrouting? Cite sources."
+  },
+  {
+    "id": "ccaf-0039",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A tool named `analyse_content` is used for two very different purposes — summarizing internal documents and extracting structured data from web pages — and the model frequently applies web-extraction logic to internal documents. What's a low-effort fix that resolves the ambiguity without changing the underlying implementation?",
+    "options": [
+      "Rewrite the tool's internal implementation to auto-detect content type",
+      "Rename analyse_content to something like extract_web_results with a web-specific description, and add a separate tool for internal documents",
+      "Add a confirmation step asking the user to specify content type every time",
+      "Remove the tool entirely and require manual extraction"
+    ],
+    "correctIndex": 1,
+    "explanation": "Renaming eliminates functional overlap at the interface level without touching the implementation — a name and description scoped to one purpose makes intent unambiguous. Rewriting the implementation to auto-detect type is a bigger, riskier change than necessary. A manual confirmation step adds friction rather than fixing the ambiguity at its source. Removing the tool loses functionality rather than clarifying it.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned that renaming an ambiguously-scoped tool (with a purpose-specific name and description) can resolve selection confusion without touching the implementation. Teach me when renaming is sufficient versus when a tool actually needs to be split into separate tools instead.",
+    "doubleCheckPrompt": "Is it accurate that renaming a tool to a more purpose-specific name, paired with a more specific description, can resolve LLM tool-selection ambiguity without requiring any change to the tool's underlying implementation? Cite sources."
+  },
+  {
+    "id": "ccaf-0040",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What does setting `isError: true` in an MCP tool response communicate to the calling model?",
+    "options": [
+      "The tool executed successfully but simply returned no data for this particular query",
+      "The tool call was specifically rate-limited and should be retried after a short delay",
+      "Execution failed, and the model should reason about recovery rather than treat the content as a normal successful result",
+      "The tool requires human approval before continuing, similar to an approval-gated workflow step"
+    ],
+    "correctIndex": 2,
+    "explanation": "isError: true is the MCP protocol's general mechanism for flagging failure, so the model reasons about recovery instead of treating error text as a valid answer. It isn't tied to approval workflows — nothing in the MCP error model ties isError to a human-approval gate; that would need to be enforced through some separate mechanism entirely, not communicated via this flag. It isn't rate-limit-specific either — a rate limit would just be one instance of the broader transient error category, not a distinct signal of its own. And it's the direct opposite of 'executed successfully but returned no data,' which is precisely the valid-empty-result case (isError: false) that isError: true is meant to be distinguished from.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned that the MCP protocol's isError flag tells the model a tool call failed, so it can reason about recovery instead of treating the error text as a normal result. Teach me the broader pattern of structured error signaling in tool-use systems, and what happens when this flag is omitted or misused.",
+    "doubleCheckPrompt": "Is it accurate that the Model Context Protocol (MCP) provides an isError flag in tool responses, and that setting it to true signals the calling model that the tool execution failed rather than succeeded? Cite sources."
+  },
+  {
+    "id": "ccaf-0041",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which error category is NOT retryable and typically requires escalation or an alternative workflow?",
+    "options": [
+      "None of these categories are ever retryable",
+      "Transient errors like timeouts",
+      "Validation errors from malformed input",
+      "Business errors like policy violations"
+    ],
+    "correctIndex": 3,
+    "explanation": "Business errors (policy violations, limit exceedances) require escalation or a different approach rather than a retry, since retrying the same request won't change the outcome — the same policy violation applies every time. Transient errors like timeouts are retryable after a delay, since the request itself was valid and the system was just temporarily unreachable. Validation errors are also retryable, but only once the agent fixes the malformed input that caused the failure in the first place. Claiming none of these categories are ever retryable is incorrect — transient and validation errors both have a genuine path to success through retrying, immediately after a delay or after correcting the input, respectively.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned the four error categories in structured tool error handling — transient, validation, business, and permission — and that business and permission errors are not retryable. Teach me how to design recovery logic that branches correctly on each category.",
+    "doubleCheckPrompt": "Is it accurate that in structured error handling for agentic tool use, 'business errors' (such as policy violations) are generally considered non-retryable and require escalation or an alternative workflow, unlike transient or validation errors? Cite sources."
+  },
+  {
+    "id": "ccaf-0042",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What are the three required metadata fields in a well-structured tool error response?",
+    "options": [
+      "httpStatus, errorMessage, stackTrace",
+      "errorCode, retryCount, timestamp",
+      "errorCategory, isRetryable, description",
+      "severity, owner, ticketId"
+    ],
+    "correctIndex": 2,
+    "explanation": "errorCategory (transient/validation/business/permission), isRetryable (boolean), and description (human-readable, with recovery guidance) give the model what it needs to decide how to respond. httpStatus/errorMessage/stackTrace is a generic REST-API-style error shape, not MCP's tool-specific model — it tells the agent nothing about whether retrying could ever succeed. errorCode/retryCount/timestamp is closer in spirit but still misses the actual required distinction — a numeric code alone doesn't tell the agent which category the failure falls into or whether a retry has any chance of working. severity/owner/ticketId is internal incident-management vocabulary aimed at human triage teams, not information an agent can act on to decide its next step.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned the three required metadata fields for a structured tool error response: errorCategory, isRetryable, and description. Teach me how to design error responses that give an agent enough information to make good recovery decisions automatically.",
+    "doubleCheckPrompt": "Is it a recommended practice for structured tool error responses in agentic systems to include an errorCategory field, an isRetryable boolean, and a human-readable description with recovery guidance? Cite sources."
+  },
+  {
+    "id": "ccaf-0043",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A tool queries a database for matching customer records and finds zero matches for a valid, well-formed query. The agent retries the same call three more times before giving up and escalating. What went wrong?",
+    "options": [
+      "The agent should have retried even more times before finally escalating to a human",
+      "The database itself is broken and urgently needs a full health check",
+      "The retries were unnecessary — a successful query with no matches is a valid empty result (isError: false), not a failure, so retrying doesn't change the outcome",
+      "The tool should have set isError: true, and the retries were correct given that flag"
+    ],
+    "correctIndex": 2,
+    "explanation": "A valid empty result means the tool successfully queried and simply found nothing — isError should be false, and no amount of retrying changes 'no results found' into a different answer. Treating it as a failure and retrying wastes calls and delays the correct response, which is just reporting no matches. Nothing in the scenario indicates the database was unreachable or malfunctioning — assuming it's broken skips the far more mundane and more likely explanation (a valid query that legitimately matched nothing), and a health check is a disproportionate response to what's actually just a correctly-executed empty result.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned the distinction between an access failure (isError: true, worth retrying) and a valid empty result (isError: false, not worth retrying) in tool responses. Teach me why confusing these two is considered a critical design mistake, and how to design a tool response schema that makes the distinction unambiguous.",
+    "doubleCheckPrompt": "Is it accurate that a database query returning zero matching results for a valid, well-formed query should be treated as a successful (non-error) response, distinct from an access failure like a timeout or authentication error? Cite sources."
+  },
+  {
+    "id": "ccaf-0044",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "In a multi-agent pipeline, a document-analysis subagent hits a transient network timeout fetching one of ten source documents. It silently returns an empty result set with no indication anything failed, and the coordinator treats that as 'no relevant documents found.' What went wrong, and what should have happened instead?",
+    "options": [
+      "Nothing wrong — an empty result set is a safe, conservative default to return here",
+      "The subagent silently suppressed a real error as a false success — it should have attempted local recovery, then propagated the error with partial results if unresolved",
+      "The subagent should have terminated the entire multi-agent workflow immediately rather than continuing with partial data",
+      "The coordinator should retry the entire ten-document pipeline from scratch to be safe"
+    ],
+    "correctIndex": 1,
+    "explanation": "Silently suppressing errors as empty successes is one of the two named anti-patterns here — it hides a real problem from the coordinator, which then makes a decision based on false information. The correct pattern is local recovery attempts for transient issues, and if that fails, propagating the actual error plus partial results and context. An empty result set is not automatically a safe default here — treating it as one is exactly the suppression anti-pattern the scenario describes, not a legitimate fallback. Retrying the entire ten-document pipeline from scratch is wasteful and doesn't fix the actual defect — the problem isn't that the pipeline failed, it's that the subagent's error response hid the failure inside what looked like a normal, if empty, result; restarting everything would just repeat the same silent suppression on the next run. Terminating the whole workflow over one document's timeout is the other named anti-pattern — overly drastic for a single, potentially recoverable failure.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned the two error-propagation anti-patterns in multi-agent systems: silently suppressing errors as false successes, and terminating an entire workflow over a single failure. Teach me the correct middle-ground pattern — local recovery plus selective propagation with partial results — and why both extremes are harmful.",
+    "doubleCheckPrompt": "Is it accurate that in multi-agent AI systems, silently suppressing a subagent's error as an empty successful result (rather than propagating it) is considered an anti-pattern, since it can lead a coordinator to make decisions based on incomplete information? Cite sources."
+  },
+  {
+    "id": "ccaf-0045",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What's the recommended range of tools to give a single specialized agent?",
+    "options": [
+      "4-5 tools scoped to that agent's specific role",
+      "10-15 tools, to cover most likely requests",
+      "As many tools as are available in the system",
+      "1-2 tools, to minimize complexity as much as possible"
+    ],
+    "correctIndex": 0,
+    "explanation": "4-5 role-scoped tools is the sweet spot — decision complexity increases with every additional tool, and overloading an agent (e.g. 18 tools) degrades selection reliability. 10-15 tools already sits well past that threshold — decision complexity keeps climbing with each additional tool, and a toolkit that size measurably degrades selection reliability even before reaching the material's explicit 18-tool overload example. Going too narrow (1-2) can under-equip an agent for its actual role. Giving it every available tool invites misuse of tools outside its specialization.",
+    "references": [
+      "Anthropic: Multi-Agent Tool Distribution"
+    ],
+    "teachMePrompt": "I just learned that the recommended tool count for a specialized agent is 4-5 tools scoped to its role, and that tool overload degrades selection reliability. Teach me why decision complexity scales with tool count, and how to decide which tools belong to which agent role in a multi-agent system.",
+    "doubleCheckPrompt": "Is it a documented recommendation in agentic system design that a single specialized agent should be given roughly 4-5 tools scoped to its role, rather than a much larger toolset, to preserve tool selection reliability? Cite sources."
+  },
+  {
+    "id": "ccaf-0046",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Which `tool_choice` mode forces the model to call one specific named tool, without the option to skip or reorder it?",
+    "options": [
+      "\"any\"",
+      "\"auto\"",
+      "There's no way to force a specific single tool",
+      "Forced selection, e.g. {type: \"tool\", name: \"extract_metadata\"}"
+    ],
+    "correctIndex": 3,
+    "explanation": "Forced selection with a specific tool name mandates that exact tool call, useful for enforcing a required first step the model can't skip. \"any\" forces some tool call but lets the model pick which one — it doesn't pin down a single specific tool. \"auto\" lets the model choose freely between text and any tool, offering no guarantee at all. The claim that there's no way to force a specific tool is simply false — forced selection exists precisely for this purpose; it's the third of the three tool_choice modes, not a missing capability.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned the three tool_choice modes — auto, any, and forced selection of a specific named tool — and when each is used. Teach me concrete use cases where forced selection of a specific tool is the right call versus the other two modes.",
+    "doubleCheckPrompt": "Is it accurate that Claude's tool_choice parameter supports forcing the model to call one specific, named tool (as opposed to 'auto' or 'any'), and that this is used to enforce mandatory first steps in a workflow? Cite sources."
+  },
+  {
+    "id": "ccaf-0047",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "When should `tool_choice` be set to \"any\" rather than left at the default \"auto\"?",
+    "options": [
+      "\"any\" is mainly a debugging setting and isn't meant to be relied on in production systems",
+      "When you need guaranteed structured output from one of several tool schemas, but don't care which specific one gets used",
+      "When you want the model to freely decide between calling a tool or responding with text",
+      "When enforcing a single mandatory first step in a workflow that the model can't be allowed to skip"
+    ],
+    "correctIndex": 1,
+    "explanation": "\"any\" is the right fit when you need the model to definitely call some tool — for example an extraction pipeline supporting multiple document types — without caring in advance which schema applies. \"auto\" is for general free-form decision-making, where returning plain text is a valid outcome. Enforcing one specific mandatory tool that the model can't skip calls for forced selection, not \"any\" — \"any\" still lets the model pick which tool, just not whether to call one. And \"any\" is not merely a debugging convenience — it's a normal, supported production setting for exactly the guaranteed-tool-call use case described here.",
+    "references": [
+      "Anthropic: Tool Use Documentation"
+    ],
+    "teachMePrompt": "I just learned that tool_choice: \"any\" is used when guaranteed structured output is needed from one of several possible tool schemas, without pre-committing to which specific tool gets called. Teach me practical scenarios (like multi-format extraction pipelines) where this mode is the right fit.",
+    "doubleCheckPrompt": "Is it accurate that Claude's tool_choice: \"any\" setting guarantees the model will call some tool from the available set, without forcing it to call one specific named tool? Cite sources."
+  },
+  {
+    "id": "ccaf-0048",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A synthesis agent frequently needs to verify simple, single-source facts, but currently every verification — simple or complex — routes through the coordinator, adding 2-3 round trips and up to 40% latency. What's the recommended fix?",
+    "options": [
+      "Give the synthesis agent a scoped verify_fact tool for the simple single-source case, while complex multi-source verification still routes through the coordinator",
+      "Increase the coordinator's overall processing speed and throughput to reduce round-trip latency",
+      "Remove verification from the synthesis agent's responsibilities entirely and hand it off elsewhere",
+      "Give the synthesis agent full, unrestricted access to all verification tools"
+    ],
+    "correctIndex": 0,
+    "explanation": "Giving the synthesis agent a scoped verify_fact tool for the common simple case (roughly 85% of cases) removes unnecessary round trips, while complex multi-source verification (the remaining 15%) still routes through the coordinator where it belongs. Full unrestricted access violates least-privilege scoping. Removing verification entirely just relocates the bottleneck rather than solving it, and optimizing coordinator speed doesn't remove the structural round-trip overhead.",
+    "references": [
+      "Anthropic: Multi-Agent Tool Distribution"
+    ],
+    "teachMePrompt": "I just learned that giving a subagent a scoped, constrained version of a coordinator capability (like a limited verify_fact tool) can eliminate unnecessary round-trip latency for the common simple case. Teach me how to decide which capabilities are good candidates for this kind of scoped delegation versus which should always route through the coordinator.",
+    "doubleCheckPrompt": "Is it accurate that routing every tool request through a central coordinator agent (rather than giving subagents scoped access for common simple cases) can meaningfully increase latency in multi-agent systems, and that scoped cross-role tools are a recommended mitigation? Cite sources."
+  },
+  {
+    "id": "ccaf-0049",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A web-search subagent is given the generic `fetch_url` tool, which can retrieve content from any URL on the internet, when its actual job only ever requires fetching and validating document URLs. What's the recommended change, and why?",
+    "options": [
+      "Add more logging around fetch_url calls instead of changing the tool",
+      "Give the subagent additional tools rather than replacing fetch_url",
+      "Replace fetch_url with a constrained load_document tool that validates document URLs only, applying the principle of least privilege",
+      "Keep fetch_url as-is, since generic tools offer more flexibility for unexpected cases"
+    ],
+    "correctIndex": 2,
+    "explanation": "Replacing an overly broad tool with a constrained, purpose-fit alternative applies least privilege — the subagent gets exactly the capability it needs, no more. Keeping the generic tool 'for flexibility' actually invites misuse outside the agent's specialization. Adding logging observes the problem without fixing the scope, and adding more tools doesn't address the over-broad existing one.",
+    "references": [
+      "Anthropic: Multi-Agent Tool Distribution"
+    ],
+    "teachMePrompt": "I just learned that replacing a generic, overly-broad tool (like an unrestricted fetch_url) with a narrower, purpose-specific alternative (like load_document) applies the principle of least privilege in tool design. Teach me how least privilege applies more broadly across agent and tool design, beyond just this example.",
+    "doubleCheckPrompt": "Is 'principle of least privilege' — giving an agent only the narrowly-scoped tool capability it actually needs rather than a broad, general-purpose one — a recognized design principle applied to LLM agent tool design? Cite sources."
+  },
+  {
+    "id": "ccaf-0050",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "Where should an MCP server configuration go if the entire team needs it and it should be version-controlled?",
+    "options": [
+      "Nowhere — team-wide MCP servers can't be shared via config",
+      ".mcp.json in the project repository root",
+      "~/.claude.json",
+      "A local .env file only"
+    ],
+    "correctIndex": 1,
+    "explanation": ".mcp.json at the project root is version-controlled and shared with everyone who clones the repo, making it the right place for team-wide servers like Jira or GitHub integrations. ~/.claude.json is personal and not version-controlled — meant for individual experimental servers, not team-wide ones. A local .env file only handles environment variables, not MCP server configuration itself (command, args, which servers to connect to) — it's the wrong artifact for this job entirely. And team-wide MCP servers absolutely can be shared via config — that's exactly what .mcp.json is for; claiming otherwise ignores the mechanism that already exists.",
+    "references": [
+      "Anthropic: MCP Configuration Documentation"
+    ],
+    "teachMePrompt": "I just learned that .mcp.json at the project root is version-controlled and shared across the team, while ~/.claude.json is personal and not shared. Teach me the full MCP scoping hierarchy and how to decide which servers belong at which level.",
+    "doubleCheckPrompt": "Is it accurate that .mcp.json in a project's repository root is the version-controlled, team-shared configuration location for MCP servers in Claude Code, distinct from the personal ~/.claude.json file? Cite sources."
+  },
+  {
+    "id": "ccaf-0051",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What syntax does `.mcp.json` support for referencing environment variables, so credentials stay out of version control?",
+    "options": [
+      "${VARIABLE_NAME}",
+      "$(VARIABLE_NAME)",
+      "{{VARIABLE_NAME}}",
+      "%VARIABLE_NAME%"
+    ],
+    "correctIndex": 0,
+    "explanation": "The ${VARIABLE_NAME} syntax lets the config file reference variable names rather than actual values, so each developer can set their own tokens locally while the committed config file stays free of secrets. %VARIABLE_NAME% is Windows batch-file environment variable syntax, not what .mcp.json's JSON-based config uses. {{VARIABLE_NAME}} is templating-engine syntax (Handlebars, Mustache, and similar) — a different tool's convention, not MCP's. $(VARIABLE_NAME) is shell command-substitution syntax, which would attempt to execute VARIABLE_NAME as a command rather than expand an environment variable.",
+    "references": [
+      "Anthropic: MCP Configuration Documentation"
+    ],
+    "teachMePrompt": "I just learned that .mcp.json supports ${VARIABLE_NAME} syntax for environment variable expansion, keeping credentials out of version control. Teach me the broader security benefits this pattern provides — safe commits, personal credentials, token rotation — and how developers typically set these variables locally.",
+    "doubleCheckPrompt": "Is it accurate that Claude Code's .mcp.json configuration file supports ${VARIABLE_NAME} syntax for environment variable expansion, allowing credentials to be kept out of version-controlled configuration? Cite sources."
+  },
+  {
+    "id": "ccaf-0052",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What's the main benefit MCP resources provide that tools alone don't?",
+    "options": [
+      "They automatically cache every tool call result so repeated queries return instantly",
+      "They replace the need for tool descriptions entirely, since the resource itself explains what is available",
+      "They let agents modify data directly, without needing a tool call to perform the write",
+      "They expose content catalogues (like schemas or documentation hierarchies) up front, avoiding exploratory tool calls just to discover what's available"
+    ],
+    "correctIndex": 3,
+    "explanation": "Resources give an agent visibility into available data (like a full database schema) without spending tool calls just discovering it — for example, avoiding a list_tables-then-describe_table-per-table sequence. \"Tools let them act on it\" — resources don't handle caching; that's an unrelated concern from exposing a content catalogue up front. Resources don't replace tool descriptions either — a resource tells the agent what data exists, not what a tool does or how to call it, so descriptions are still needed for actual tool selection and use. And resources don't let agents modify data directly — they're read-only visibility; any actual write still requires a real tool call.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned that MCP resources expose content catalogues to agents without requiring exploratory tool calls, saving tool-call overhead compared to discovering the same information through repeated tool queries. Teach me more about the distinction between MCP resources and MCP tools, and good examples of what belongs in each.",
+    "doubleCheckPrompt": "Is it accurate that MCP (Model Context Protocol) 'resources' are designed to expose content catalogues — like database schemas or documentation structures — to an agent without requiring exploratory tool calls to discover that same information? Cite sources."
+  },
+  {
+    "id": "ccaf-0053",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "A team needs to integrate with Jira and is deciding whether to build a custom MCP server or use an existing one. According to the standard build-vs-use decision, what should they do first?",
+    "options": [
+      "Evaluate existing community MCP servers first, since Jira is a standard integration likely already covered and maintained",
+      "Build a custom server immediately, since custom servers are always more reliable",
+      "Skip MCP entirely and use direct API calls instead"
+    ],
+    "correctIndex": 0,
+    "explanation": "Community MCP servers should be evaluated first for standard integrations like Jira, GitHub, or Slack — they're maintained, tested, and already cover typical use cases. Custom servers are reserved for team-specific workflows or proprietary systems that community servers don't cover, not as a default first choice — 'always more reliable' overstates it, since a custom build also means the team now owns all its maintenance and bug-fixing. Skipping MCP for direct API calls throws away the whole point of a shared, tool-callable interface the model can use consistently, in favor of one-off integration code.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned that the standard build-vs-use decision for MCP servers favors evaluating community servers first for standard integrations, reserving custom server builds for team-specific or proprietary needs. Teach me how to evaluate whether a community MCP server actually meets a team's needs before deciding to build custom.",
+    "doubleCheckPrompt": "Is it a recommended practice to evaluate existing community-maintained MCP servers before building a custom MCP server for a standard integration like Jira, GitHub, or Slack? Cite sources."
+  },
+  {
+    "id": "ccaf-0054",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "An MCP tool for querying an internal database has a one-line description: 'queries the database.' The agent frequently ignores it in favor of a built-in tool with a much richer description, even when the MCP tool would clearly be more appropriate. What's the fix?",
+    "options": [
+      "Switch the internal database to a completely different MCP server implementation entirely",
+      "Enhance the MCP tool's description to explain its capabilities, outputs, when to use it, and how it compares to the built-in alternative, in similar detail",
+      "Remove the built-in tool entirely so the MCP tool becomes the agent's only available option",
+      "Nothing can be done — this reflects an inherent, unfixable limitation of MCP tools generally"
+    ],
+    "correctIndex": 1,
+    "explanation": "A sparse MCP tool description loses out to a richer built-in one — the fix is enhancing the MCP description with the same level of detail, not removing options or accepting the limitation as permanent. Switching to a different MCP server doesn't address the actual cause at all — the problem is the description text on the existing tool, not which server hosts it; a different server would have the same sparse-description problem unless its description was also rewritten. Removing the built-in tool forces a workaround but leaves the real defect — the sparse description — untouched, and loses a capability the agent may still need elsewhere. Treating this as an inherent limitation is incorrect; it's the same fixable description-quality issue that applies to any tool, MCP or built-in.",
+    "references": [
+      "Model Context Protocol Specification"
+    ],
+    "teachMePrompt": "I just learned that an MCP tool with a sparse description can lose out to a built-in tool with a richer one, even when the MCP tool is the better fit for the task. Teach me what a well-enhanced MCP tool description should include to compete fairly for selection against built-in alternatives.",
+    "doubleCheckPrompt": "Is it accurate that an MCP tool with a sparse or minimal description may be passed over by the model in favor of a built-in tool with a more detailed description, even when the MCP tool would be functionally more appropriate? Cite sources."
+  },
+  {
+    "id": "ccaf-0055",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "You need to find every file in a repo with the extension `.test.tsx`. Which built-in tool fits?",
+    "options": [
+      "Glob, since it matches file paths by naming pattern",
+      "Edit, since it can target specific file types",
+      "Grep, since it searches broadly across the repo",
+      "Read, to scan every file's contents"
+    ],
+    "correctIndex": 0,
+    "explanation": "Glob matches file paths by naming pattern — exactly what finding files by extension requires. Grep searches file contents, not paths, so it's the wrong tool for a pure naming-pattern search. Edit doesn't target specific file types at all — it makes a targeted text edit within one already-known file via exact string matching; it has no file-discovery or file-type-filtering capability, so the claim that it 'can target specific file types' misdescribes what Edit actually does. Read scans the contents of a file you already have the path to — like Edit, it operates on a file you've already identified, not on discovering which files exist.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned the core distinction between Grep and Glob: Grep searches file contents, Glob matches file paths by naming pattern. Teach me concrete examples of tasks that need each one, and cases where you'd need to combine both in sequence.",
+    "doubleCheckPrompt": "Is it accurate that in Claude Code, the Glob tool is used for matching file paths by naming pattern (like finding all .test.tsx files), while Grep is used for searching file contents? Cite sources."
+  },
+  {
+    "id": "ccaf-0056",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "An Edit call fails because the target text appears multiple times in the file, making the match non-unique. What's the correct next step?",
+    "options": [
+      "Widen old_string with more surrounding context until it matches only one location, or set replace_all: true if every occurrence should change",
+      "Give up on programmatic editing and ask the user to edit manually",
+      "Retry the same Edit call repeatedly until it succeeds",
+      "Fall back to Read the full file, then Write the complete modified version immediately"
+    ],
+    "correctIndex": 0,
+    "explanation": "When Edit fails due to non-unique text, the documented recovery is to widen old_string with more surrounding context until it pins down exactly one location, or set replace_all: true if every occurrence should actually change — both keep you on Edit and cost almost no extra context. Jumping straight to Read + Write is an explicitly penalized anti-pattern: it loads and rewrites the entire file for what's usually a one-line change, when Edit could have resolved it directly. Read + Write is the last-resort fallback only when neither widening the anchor nor replace_all can disambiguate the target — not the next step. Retrying the identical call changes nothing, since the ambiguity is still there. Asking the user to intervene manually skips a fix Edit itself can resolve.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned that Edit should be tried first for file modifications because it's fast and context-efficient, falling back to Read + Write only when Edit fails due to non-unique text matches. Teach me why defaulting straight to Read + Write for every modification is discouraged, and what the context-token tradeoff actually looks like.",
+    "doubleCheckPrompt": "Is it accurate that in Claude Code, the recommended pattern for file modification is to try the Edit tool first (targeted, unique-text matching), falling back to Read plus Write only when Edit fails due to non-unique text matches? Cite sources."
+  },
+  {
+    "id": "ccaf-0057",
+    "topic": "ccaf",
+    "mode": "quick-fire",
+    "prompt": "What's the recommended approach to understanding an unfamiliar codebase, in terms of context budget?",
+    "options": [
+      "Read every file in the repository upfront so nothing is missed",
+      "Skip Grep entirely and rely only on Read",
+      "Use Glob to list every file, then Read them all in alphabetical order",
+      "Use Grep to find entry points, then Read only the specific files that trace from those entry points, justified step by step"
+    ],
+    "correctIndex": 3,
+    "explanation": "The incremental approach — Grep for entry points, then Read only what those entry points lead to, tracing outward as justified — avoids burning context budget on files that turn out to be irrelevant. Skipping Grep entirely and relying only on Read removes the one mechanism that narrows down which files are actually relevant before you spend tokens reading them. Using Glob to list every file and reading them all in alphabetical order still means reading everything — Glob just changes the order, it doesn't reduce what gets read. Reading every file in the repository upfront is explicitly called out as a context-budget killer — the single costliest exploration mistake.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned the incremental codebase exploration pattern: Grep for entry points, then Read only what's justified by following imports and usage from there, rather than reading everything upfront. Teach me how this connects to the broader idea of context budget management in agentic coding tasks.",
+    "doubleCheckPrompt": "Is it a recommended best practice in Claude Code to explore an unfamiliar codebase incrementally — using Grep to find entry points and reading only files justified by that trace — rather than reading all files upfront? Cite sources."
+  },
+  {
+    "id": "ccaf-0058",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "You need to find where a function is used across a codebase, but it's defined in one module, re-exported through a wrapper/barrel file, and consumers only ever import it by the wrapper's name. A simple Grep for the original function name turns up almost no results. What's the correct approach?",
+    "options": [
+      "Conclude the function is unused and safe to remove, since the near-empty Grep result suggests nothing references it anymore",
+      "Grep for the function definition, Read the defining file to find its exported names, then Grep for each exported name (including the barrel file's module name if re-exported) across the codebase",
+      "Give up on static tracing entirely and ask the team directly which files still depend on the function"
+    ],
+    "correctIndex": 1,
+    "explanation": "Indirect consumers via a wrapper require tracing the re-export chain: find the definition, identify what names it's exported under, and search for each of those — including the barrel file's own module name if it's re-exported through one. A near-empty Grep result for the original name doesn't mean the function is unused; it means most consumers reference it by a different, re-exported name — concluding it's safe to remove risks breaking every one of those indirect callers. Giving up on static tracing skips a fix that's fully achievable by tracing the re-export chain yourself — asking the team is a fallback for when static analysis genuinely can't resolve something, not for a standard wrapper-module pattern like this one.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned how to trace function usage across wrapper/barrel modules: Grep for the definition, Read to find exported names, then Grep for each exported name including the barrel file itself. Teach me why a naive single Grep for a function name can badly undercount real usage in codebases with re-export patterns.",
+    "doubleCheckPrompt": "Is it accurate that when a function is re-exported through a wrapper or barrel module, a simple Grep for the original function name can significantly undercount actual usages, and that tracing exported names through the defining file is the recommended fix? Cite sources."
+  },
+  {
+    "id": "ccaf-0059",
+    "topic": "ccaf",
+    "mode": "scenario",
+    "prompt": "You need to find every file that calls a deprecated function, and also find the existing test files for those callers. What's the correct tool sequence and order?",
+    "options": [
+      "Use only Grep for both steps, since it can also match file names",
+      "Use only Glob for both steps, since test files usually follow predictable naming",
+      "Grep for the function name to find callers (content search), then Glob for test files matching those caller filenames (path matching)",
+      "Glob first to find all files, then Grep each one for the function call"
+    ],
+    "correctIndex": 2,
+    "explanation": "This is the 'Grep then Glob' pattern: content search first to identify the actual callers by their function usage, then path matching to find test files named after those specific callers. Grep alone can't reliably match file naming patterns for tests. Glob alone can't search inside file contents to find who calls the deprecated function in the first place. Reversing the order — Glob first, then Grep each result — doesn't work either: Glob would return every file in the repo since nothing yet narrows down which ones are actual callers, so you'd still have to Grep every single one of those results for the function call, which is just a slower detour to the same content search Grep alone does directly. It also doesn't get you to the test files any faster, since the whole point of the Glob step is to match test-file naming patterns keyed off the specific callers Grep already found — a step that can't happen before Grep has run.",
+    "references": [
+      "Anthropic: Claude Code Documentation"
+    ],
+    "teachMePrompt": "I just learned the 'Grep then Glob' pattern for a two-part task: content search (Grep) to find callers of a deprecated function, followed by path matching (Glob) to find their corresponding test files. Teach me other two-tool sequencing patterns that combine content search and path matching in codebase exploration.",
+    "doubleCheckPrompt": "Is it accurate that for finding callers of a deprecated function and their corresponding test files, the correct sequence in Claude Code is to use Grep first (content search for the function call) and then Glob (path matching for test filenames), rather than the reverse order? Cite sources."
+  }
+]
