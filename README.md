@@ -16,31 +16,31 @@ I also used a written brief and plan ([`PROJECT_BRIEF.md`](PROJECT_BRIEF.md), [`
   <img src="docs/screenshots/progress.png" width="250" alt="Study Hub showing per-topic progress bars">
 </p>
 
-Point the pipeline at any subject and it builds a reviewed question bank for it. No accounts, streaks or scores.
+You can point the pipeline at any subject and it will build a reviewed question bank for it. The app has no accounts, streaks or scores.
 
 ## The content pipeline
 
-Three [Claude Code](https://claude.com/claude-code) commands ([`.claude/commands/`](.claude/commands/)) plus deterministic checks ([`scripts/`](scripts/)):
+Three [Claude Code](https://claude.com/claude-code) commands (in [`.claude/commands/`](.claude/commands/)) plus a few scripts:
 
-- **`/discuss`** plans a batch: reads current coverage per topic, splits the request into non-overlapping sections, and decides per section whether facts need web verification.
-- **`/generate`** writes each section in a parallel subagent, then hands the batch to agents that didn't write it: an adversarial reviewer that tries to break every question, and a web-searching fact-checker for fast-moving topics. It also accepts questions written elsewhere and runs the same checks. Anything that fails is dropped, never quietly patched.
-- **Mechanical checks** ([`check-bias.mjs`](scripts/check-bias.mjs)) run on every batch: answer-position spread, whether the correct answer stands out by length or wording, and explanations that cite options by letter. A [Claude Code hook](.claude/settings.json) also runs them automatically whenever Claude edits question files, and blocks on a hard failure, so the rules don't depend on Claude remembering them.
-- **`/merge`** waits for a human sign-off, assigns answer positions in code ([`rebalance-positions.mjs`](scripts/rebalance-positions.mjs)), and reports bias stats for the whole bank.
+- **`/discuss`** plans a batch. If the bank already has questions on the topic, it checks what they cover so the new batch fills gaps instead of repeating them. It then splits the request into sections that don't overlap, and decides for each section whether the facts need to be checked against the web.
+- **`/generate`** writes each section in its own subagent, with all the sections running in parallel. The finished batch then goes to two agents that didn't write it: a reviewer that tries to find what's wrong with each question, and a fact-checker that uses web search for fast-moving topics. Questions that fail are dropped and the reasons are listed. It can also take questions written elsewhere and run them through the same checks.
+- **Mechanical checks** in [`check-bias.mjs`](scripts/check-bias.mjs) run on every batch. They look at whether correct answers are spread evenly across positions, whether the right answer stands out by being longer or worded differently, and whether any explanation refers to an option by its letter. A [Claude Code hook](.claude/settings.json) also runs these checks whenever Claude edits a question file, and stops it if one fails, so the rules are enforced instead of relying on Claude to remember them.
+- **`/merge`** waits for a human sign-off. Once the batch is approved, it assigns answer positions in code ([`rebalance-positions.mjs`](scripts/rebalance-positions.mjs)) and reports bias stats for the whole bank.
 
 ### Issues it caught, and what changed
 
 | Issue | What the pipeline does now |
 |---|---|
-| The correct answer was clearly the longest option in 97% of one topic's questions | Measured on every batch; flagged questions are dropped. Now 0% across all topics |
-| Answer positions skewed: "A" was correct in 42% of another topic's questions | Positions are assigned in code, never by the model. Now ~25% each |
-| Explanations cited "Option B", which pointed at the wrong option once options moved | Hard failure in the check |
-| Reasoning added to a wrong option was itself true, making it defensible | The reviewer checks for this explicitly |
-| Correct options *sound* different: brackets and examples on the right answer, "always"/"never" on the wrong ones | Measured and reported on every batch; cleanup is next |
+| In one topic, the correct answer was clearly the longest option in 97% of questions. | The checks measure this on every batch and drop flagged questions. It's now 0% in every topic. |
+| Answer positions were skewed: in another topic, "A" was correct 42% of the time. | Answer positions are now assigned in code rather than by the model, so each position is correct about 25% of the time. |
+| Some explanations referred to "Option B", which pointed at the wrong option once the options were reordered. | The check now fails any explanation that refers to an option by its letter. |
+| Reasoning added to a wrong option was sometimes true, which made that option defensible. | The reviewer now checks for this explicitly. |
+| Correct options can still sound different from wrong ones, for example brackets and examples on the right answer and "always" or "never" on the wrong ones. | This is measured and reported on every batch. Cleaning it up is the next step. |
 
 ## The app
 
-- **Offline-first.** A hand-written, 70-line service worker ([`public/sw.js`](public/sw.js)). Answering never touches the network.
-- **One endpoint, locked.** The optional progress backup (Vercel Blob) requires a shared secret. Visitors' progress never leaves their browser.
+- **Works offline.** A hand-written, 70-line service worker ([`public/sw.js`](public/sw.js)) caches the app, so answering questions never needs the network.
+- **Locked backup endpoint.** The optional progress backup to Vercel Blob only accepts requests that carry a shared secret, and visitors' progress never leaves their own browser.
 
 **Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Vercel + Blob
 
@@ -53,9 +53,9 @@ npm install
 npm run dev
 ```
 
-Node 20+. No environment variables needed: progress lives in `localStorage`.
+You'll need Node 20 or later. No environment variables are needed, because progress is stored in the browser's `localStorage`.
 
 ## Make it yours
 
-- **Questions:** add `data/questions/<topic>.json` (schema in [`types/question.ts`](types/question.ts)) and register it in [`lib/questionPool.ts`](lib/questionPool.ts), or generate a set with `/discuss`, `/generate` and `/merge` in Claude Code. Check any bank with `node scripts/check-bias.mjs`.
-- **Deploy:** import the repo into [Vercel](https://vercel.com/new). No environment variables needed. For the optional progress backup, connect a Vercel Blob store (this sets `BLOB_READ_WRITE_TOKEN` for you), add a `BACKUP_SECRET`, then open `/?backup=<secret>` once on each device. Details in [`.env.example`](.env.example).
+- **Questions:** to add a topic by hand, create `data/questions/<topic>.json` (the schema is in [`types/question.ts`](types/question.ts)) and register it in [`lib/questionPool.ts`](lib/questionPool.ts). You can also generate a set with `/discuss`, `/generate` and `/merge` in Claude Code, and check any bank with `node scripts/check-bias.mjs`.
+- **Deploy:** import the repo into [Vercel](https://vercel.com/new); no environment variables are needed. For the optional progress backup, connect a Vercel Blob store (which sets `BLOB_READ_WRITE_TOKEN` for you), add a `BACKUP_SECRET`, and open `/?backup=<secret>` once on each device. There are more details in [`.env.example`](.env.example).
