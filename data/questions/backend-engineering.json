@@ -5,10 +5,10 @@
     "mode": "scenario",
     "prompt": "You're building a public Single Page Application (SPA) that calls APIs on behalf of signed-in users. Which OAuth 2.0 flow is the current recommended choice?",
     "options": [
-      "Resource Owner Password Credentials (ROPC) because it avoids redirects",
-      "Implicit flow because the browser cannot keep a client secret",
-      "Authorization Code flow with PKCE",
-      "Client Credentials flow because the SPA is the client"
+      "Resource Owner Password Credentials (ROPC), because collecting the password directly avoids any redirects",
+      "Implicit flow, because the browser can't keep a client secret, so tokens are returned directly in the redirect",
+      "Authorization Code flow with PKCE, because PKCE protects the code exchange without needing a client secret",
+      "Client Credentials flow, because the SPA itself is the OAuth client and can authenticate on the user's behalf"
     ],
     "correctIndex": 2,
     "explanation": "Authorization Code with PKCE is the recommended flow for public browser-based clients because PKCE protects the authorization code from interception without requiring a client secret. 'Implicit flow' reflects an older recommendation from early OAuth deployments but exposes access tokens directly in the front channel and is no longer the preferred choice in modern OAuth guidance. 'Client Credentials' is intended for machine-to-machine access where no end user is involved, so it cannot represent a signed-in user's delegated permissions. 'ROPC' requires users to hand their credentials directly to the application, preventing federation, MFA, and many identity-provider security features; it is discouraged except for limited legacy scenarios.",
@@ -348,9 +348,9 @@
     "prompt": "A message queue that is normally near empty now contains millions of pending jobs. Producers are operating normally, consumers show no obvious errors, and CPU utilization remains low. Which metric should you investigate first?",
     "options": [
       "Consumer throughput and processing latency relative to arrival rate",
-      "The operating system uptime of the message broker",
-      "The TLS certificate expiration date of the queue server",
-      "The number of frontend HTTP requests served per minute"
+      "The operating system uptime of the message broker, in case a recent restart left it in a degraded state",
+      "The TLS certificate expiration date of the queue server, since an expiring certificate slows down every connection handshake",
+      "The number of frontend HTTP requests served per minute across the web tier"
     ],
     "correctIndex": 0,
     "explanation": "Queue depth is the result of arrival rate versus processing rate. If producers are healthy and consumers are not keeping up despite low CPU utilization, the first step is to understand consumer throughput, processing latency, and potential blocking or downstream dependencies. Frontend request volume may explain increased load but not why consumers stopped draining the queue. Broker uptime is not directly related to processing efficiency. Certificate expiration would typically cause connectivity failures rather than gradual queue accumulation.",
@@ -408,7 +408,7 @@
     "prompt": "A team is choosing a redundancy strategy for a strongly-consistent order-processing datastore that requires a single authoritative writer at any moment (no multi-master conflict resolution). They need low RTO if the primary fails. Which is the right call?",
     "options": [
       "Active-passive, but promote the standby manually only after a human confirms the outage, since automated failover is inherently unsafe",
-      "Active-passive with automated, health-checked failover and continuous replication to the standby",
+      "Active-passive with automated, health-checked failover and continuous replication to the standby, because only one writer may ever be active",
       "Active-active across two regions, since running both regions live always yields better availability than one region sitting idle"
     ],
     "correctIndex": 1,
@@ -778,10 +778,10 @@
     "mode": "scenario",
     "prompt": "A hospital scheduling system enforces 'at least one doctor must remain on call' with each doctor's checkout transaction doing: (1) SELECT COUNT(*) of doctors currently on call for the shift, (2) if count > 1, DELETE their own on-call row. The two last remaining on-call doctors both click 'go off call' at nearly the same instant, both under Postgres's REPEATABLE READ isolation. What actually happens, and what fixes it?",
     "options": [
-      "REPEATABLE READ's snapshot isolation prevents this the same way it prevents phantom reads: each doctor's transaction will see the other's completed checkout, so only one can succeed.",
-      "This is a dirty read, and running the transactions at READ COMMITTED instead would fix it, since READ COMMITTED prevents dirty reads.",
-      "Both transactions take a snapshot showing count = 2, each independently concludes it's safe to go off call, and both commit \u2014 leaving zero doctors on call. This is write skew: snapshot isolation only prevents anomalies on rows a transaction itself reads and writes, not conflicts between a row one transaction reads and a different row another transaction writes; only SERIALIZABLE (or an explicit lock/constraint) prevents it.",
-      "One of the two transactions will deadlock and be automatically rolled back, since both are trying to modify overlapping rows \u2014 no application changes are needed."
+      "REPEATABLE READ's snapshot isolation prevents this the same way it prevents phantom reads: each doctor's transaction sees the other's completed checkout, so only one can succeed",
+      "This is a dirty read, and running the transactions at READ COMMITTED instead would fix it, since READ COMMITTED never lets one transaction see another's uncommitted changes",
+      "Both snapshots show count = 2, so both doctors go off call and both commit, leaving no one on call. That's write skew; only SERIALIZABLE or an explicit lock/constraint prevents it",
+      "One of the two transactions deadlocks and is rolled back automatically, because both are modifying overlapping rows in the same on-call table, so no application changes are needed"
     ],
     "correctIndex": 2,
     "explanation": "This is the textbook write-skew anomaly: each transaction reads a consistent snapshot (count = 2), makes a decision based on it, and writes a different row than the one it read \u2014 so neither transaction's snapshot ever reflects the other's write, and both commit successfully, violating the invariant. The write-skew answer correctly identifies this and the fix (true SERIALIZABLE, which detects the dependency cycle, or an explicit lock/constraint). Relying on REPEATABLE READ alone is wrong because snapshot isolation's phantom-read prevention only guards a transaction's own repeated queries against new matching rows \u2014 it does nothing to stop two transactions from acting on the same stale snapshot and writing different rows. The deadlock answer is wrong because the two DELETEs target different rows (each doctor deletes their own row), so there's no lock conflict and no deadlock to save the system. Calling it a dirty read misnames the anomaly \u2014 no one is reading uncommitted data \u2014 and downgrading to READ COMMITTED would make the race window worse, not better.",
@@ -798,10 +798,10 @@
     "mode": "scenario",
     "prompt": "An engineer who learned isolation levels on Postgres moves to a codebase running MySQL/InnoDB at its default REPEATABLE READ. They write a transaction that runs SELECT ... FOR UPDATE over a range of rows matching a WHERE clause, holding the transaction open. A concurrent transaction then tries to INSERT a new row that falls inside that range. The engineer assumes MySQL's REPEATABLE READ, like Postgres's, only prevents phantoms via MVCC snapshots for plain reads \u2014 so the concurrent INSERT should succeed unimpeded. What's the flaw?",
     "options": [
-      "The concurrent INSERT will always succeed regardless, because InnoDB's gap locks apply only to DELETE and UPDATE statements, never to INSERT.",
-      "InnoDB's REPEATABLE READ additionally uses next-key locking (gap locks combined with record locks) for locking reads like SELECT ... FOR UPDATE and for writes \u2014 this blocks inserts into the locked range, so the concurrent INSERT will block (or deadlock/timeout), not silently succeed. This is a genuine behavioral difference from Postgres, whose REPEATABLE READ relies purely on MVCC snapshots and doesn't take gap locks.",
-      "MySQL's REPEATABLE READ behaves identically to Postgres's in every respect since both claim to implement the SQL-standard REPEATABLE READ level, so the concurrent INSERT will succeed exactly as it would in Postgres.",
-      "InnoDB doesn't support locking reads like SELECT ... FOR UPDATE at REPEATABLE READ \u2014 that requires SERIALIZABLE \u2014 so the query would simply raise a syntax or permission error."
+      "The concurrent INSERT always succeeds regardless, because InnoDB's gap locks are only taken by DELETE and UPDATE statements and never apply to INSERTs into the range",
+      "InnoDB adds next-key (gap + record) locks for locking reads like SELECT ... FOR UPDATE, so the concurrent INSERT into that range blocks (or times out) \u2014 unlike Postgres, which takes no gap locks",
+      "MySQL's REPEATABLE READ behaves identically to Postgres's in every respect since both claim to implement the SQL-standard REPEATABLE READ level, so the concurrent INSERT will succeed exactly as it would in Postgres",
+      "InnoDB doesn't support locking reads like SELECT ... FOR UPDATE at REPEATABLE READ \u2014 they need SERIALIZABLE \u2014 so the query itself would fail with a syntax or permission error"
     ],
     "correctIndex": 1,
     "explanation": "InnoDB's REPEATABLE READ is not pure MVCC snapshot isolation for locking operations \u2014 it layers next-key locks (record lock + gap lock) onto SELECT ... FOR UPDATE/FOR SHARE and onto writes specifically to close the phantom-read gap that the SQL standard leaves open at REPEATABLE READ, which is the opposite of Postgres's approach of using pure snapshot isolation with no gap locks. The next-key locking answer captures this correctly. Assuming MySQL's and Postgres's REPEATABLE READ behave identically is the exact misconception being tested: both databases label the level 'REPEATABLE READ,' but the concrete locking mechanics differ substantially. The claim that locking reads require SERIALIZABLE is wrong \u2014 FOR UPDATE is fully supported at REPEATABLE READ in InnoDB and is in fact the normal way to take a locking read at that level. The claim that the INSERT always succeeds is wrong because gap locks exist precisely to block inserts into a locked range \u2014 that's their defining purpose, not an exception to it.",
@@ -817,12 +817,12 @@
     "id": "backend-engineering-0042",
     "topic": "backend-engineering",
     "mode": "scenario",
-    "prompt": "A batch report transaction runs under READ COMMITTED. It queries a table's total row count near the start of the transaction, loops running per-row detail queries, then re-queries the total row count at the end to include in a summary line \u2014 expecting it to match the first count. In production, the two counts occasionally differ. Why does this happen at READ COMMITTED, and what's the right fix?",
+    "prompt": "A batch report transaction runs under READ COMMITTED in Postgres. It queries a table's total row count near the start of the transaction, loops running per-row detail queries, then re-queries the total row count at the end to include in a summary line \u2014 expecting it to match the first count. In production, the two counts occasionally differ. Why does this happen at READ COMMITTED, and what's the right fix?",
     "options": [
-      "This is a bug \u2014 READ COMMITTED is required by the SQL standard to prevent non-repeatable reads, so the database itself is misbehaving.",
-      "READ COMMITTED only guarantees each individual statement sees committed data as of that statement, not one consistent snapshot for the whole transaction \u2014 so a commit landing between the two count queries changes the second result. The fix is to run the report under REPEATABLE READ (or an explicit snapshot), so both queries see the same transaction-start snapshot.",
-      "This is caused by dirty reads \u2014 the report is counting uncommitted rows from other transactions \u2014 so switching to READ UNCOMMITTED would fix it by always reading the freshest data.",
-      "The mismatch is a phantom read, a distinct anomaly that READ COMMITTED was never meant to address, and no isolation level short of manually taking a table lock for the whole report can fix it."
+      "It's a database bug: READ COMMITTED should stop other transactions' commits from showing up mid-transaction, so the two counts ought to match",
+      "READ COMMITTED gives each statement its own snapshot, not one per transaction, so a commit between the two counts changes the second; running the report at REPEATABLE READ fixes it",
+      "This is caused by dirty reads \u2014 the report is counting uncommitted rows from other transactions \u2014 so switching to READ UNCOMMITTED would fix it by always reading the freshest data",
+      "It's a phantom read, which isolation levels don't address; the report has to hold a table lock for its whole run"
     ],
     "correctIndex": 1,
     "explanation": "READ COMMITTED's guarantee is per-statement: each query sees whatever was committed as of that query, but nothing stops a different transaction from committing in between two of your own queries \u2014 that's exactly the non-repeatable-read anomaly, and it's allowed by the SQL standard at this level, not a bug. The per-statement snapshot answer correctly names the cause and gives the standard fix: REPEATABLE READ (or an explicit snapshot) fixes both queries to one transaction-start snapshot without needing table locks. Calling it a bug is wrong because READ COMMITTED is explicitly permitted to allow non-repeatable reads by the standard \u2014 that's the whole point of the level being weaker than REPEATABLE READ. The dirty-read answer misdiagnoses the anomaly as a dirty read (reading uncommitted data), when in fact both counts reflect only committed data \u2014 the problem is which committed data, not whether it was committed; READ UNCOMMITTED would make things strictly worse. The phantom-read answer correctly notes this could also be framed via phantom rows but is wrong that no lighter-weight fix exists \u2014 REPEATABLE READ solves it without any table locking.",
@@ -839,10 +839,10 @@
     "mode": "scenario",
     "prompt": "A 'remaining inventory' decrement is implemented as: SELECT quantity FROM inventory WHERE id = 1 (read into application code), subtract 1 in the application, then UPDATE inventory SET quantity = :newValue WHERE id = 1 \u2014 all inside a transaction running at READ COMMITTED. Under concurrent load, the resulting quantity is sometimes higher than it should be (a lost update). Which fix actually solves it, and why do the alternatives fail?",
     "options": [
-      "Make the decrement atomic in the database itself \u2014 rewrite the UPDATE as `SET quantity = quantity - 1`, or take a row lock with SELECT ... FOR UPDATE before reading \u2014 so the read-modify-write happens as one indivisible step instead of two round trips that let both transactions read the same starting value. READ COMMITTED alone does nothing to stop two transactions from reading the same value before either writes.",
-      "Raise the isolation level to SERIALIZABLE and change nothing else \u2014 SERIALIZABLE guarantees transactions behave as if run one at a time, so the increment logic becomes fully safe automatically, with no other code changes needed.",
-      "This is a dirty read: the second transaction is reading a value written by the first transaction before it committed.",
-      "READ COMMITTED already prevents lost updates, since it prevents dirty reads \u2014 the bug must be caused by something else, like application-level caching."
+      "Make the decrement atomic in the database: `SET quantity = quantity - 1`, or lock the row with SELECT ... FOR UPDATE before reading, so two transactions can't both read the same starting value",
+      "Raise the isolation level to SERIALIZABLE and change nothing else \u2014 SERIALIZABLE guarantees transactions behave as if run one at a time, so the decrement logic becomes fully safe automatically, with no other code changes needed",
+      "This is a dirty read: the second transaction reads the quantity the first one wrote before committing, so preventing dirty reads with a stricter level fixes it",
+      "READ COMMITTED already prevents lost updates, since it prevents dirty reads, so the bug must come from something else, like a stale application-level cache"
     ],
     "correctIndex": 0,
     "explanation": "The bug is a classic lost update: two transactions both read quantity=10, both compute 9, and the second UPDATE simply overwrites the first, losing one decrement. Making the decrement atomic is the real fix \u2014 making the read-modify-write atomic (single UPDATE expression) or serializing access with a row lock removes the two-round-trip race entirely. Raising the level to SERIALIZABLE alone is a trap: while Postgres's real SERIALIZABLE would eventually catch the conflict, it does so by aborting one transaction with a serialization-failure error at commit time \u2014 the application still needs explicit retry logic to catch and re-run that transaction, so it isn't 'automatic' with no other code changes, contrary to the claim. Calling it a dirty read misnames the anomaly: no one is reading data before it was committed; both reads see a committed value, they just both see the *same* one. Assuming READ COMMITTED prevents lost updates is a real and common misconception \u2014 READ COMMITTED's guarantee (no dirty reads) says nothing about protecting a read-then-write sequence spanning two statements, so lost updates are entirely possible at this level.",
@@ -859,13 +859,13 @@
     "mode": "scenario",
     "prompt": "A read-only nightly analytics job runs many SELECT queries across several tables and needs all of them to reflect one consistent point-in-time view (no non-repeatable reads or phantoms across the whole job). An engineer sets the transaction to SERIALIZABLE to guarantee this. In Postgres, this now occasionally throws 'could not serialize access due to read/write dependencies' errors that abort the job, even though the job never writes anything. What's the better choice, and why?",
     "options": [
-      "Use READ COMMITTED \u2014 a read-only transaction can't produce a serialization anomaly at any isolation level, so READ COMMITTED works exactly as well as REPEATABLE READ here.",
-      "The serialization errors mean Postgres's SSI implementation has a bug \u2014 a purely read-only transaction should never be aborted due to concurrent writers.",
-      "SERIALIZABLE is required for any read-only job that touches more than one table \u2014 only SERIALIZABLE guarantees the reads reflect a single instant in time across tables.",
-      "Use REPEATABLE READ instead \u2014 since Postgres's REPEATABLE READ is snapshot isolation, a read-only transaction gets one consistent snapshot for its whole duration (no non-repeatable reads or phantoms) without SERIALIZABLE's added predicate-lock-based conflict detection, which exists specifically to prevent write skew \u2014 an anomaly that's impossible for a transaction that performs no writes."
+      "Use READ COMMITTED \u2014 with no writes in the job, the stronger levels have nothing to protect, so it behaves the same as REPEATABLE READ here",
+      "The serialization errors mean Postgres's SSI implementation has a bug, since a purely read-only transaction should never be aborted because of concurrent writers",
+      "SERIALIZABLE is required for any read-only job that touches more than one table, because only SERIALIZABLE guarantees the reads reflect a single instant in time across all of those tables",
+      "Use REPEATABLE READ: in Postgres it's snapshot isolation, so the job gets one consistent snapshot for its whole run without SERIALIZABLE's conflict-detection aborts"
     ],
     "correctIndex": 3,
-    "explanation": "REPEATABLE READ's snapshot isolation already gives a purely read-only transaction everything it needs \u2014 one consistent snapshot across every query for the whole transaction \u2014 without paying for SERIALIZABLE's predicate-lock tracking, which exists to catch write skew between concurrent read-write transactions, a category this read-only job can never participate in as the writer. Switching to READ COMMITTED is wrong: it does not give one snapshot for the whole transaction, so it would reintroduce non-repeatable reads and phantoms across the job's separate queries \u2014 it is not equivalent to REPEATABLE READ for this purpose. Claiming SERIALIZABLE is required is wrong: cross-table point-in-time consistency for a read-only transaction is exactly what REPEATABLE READ's single snapshot already provides; SERIALIZABLE adds nothing extra for reads. Calling it an SSI bug is wrong \u2014 this is documented, expected behavior: Postgres's SSI can abort a read-only transaction that participates in a dangerous dependency cycle with concurrent read-write transactions (Postgres even offers READ ONLY DEFERRABLE specifically to avoid this for read-only work), so it isn't a bug.",
+    "explanation": "REPEATABLE READ's snapshot isolation already gives a purely read-only transaction everything it needs \u2014 one consistent snapshot across every query for the whole transaction \u2014 without paying for SERIALIZABLE's predicate-lock tracking, which exists to catch write skew between concurrent read-write transactions, a category this read-only job can never participate in as the writer. Switching to READ COMMITTED is wrong: it does not give one snapshot for the whole transaction, so it would reintroduce non-repeatable reads and phantoms across the job's separate queries \u2014 it is not equivalent to REPEATABLE READ for this purpose. Claiming SERIALIZABLE is required is wrong: cross-table point-in-time consistency for a read-only transaction is exactly what REPEATABLE READ's single snapshot already provides; SERIALIZABLE adds nothing this job needs. Calling it an SSI bug is wrong \u2014 this is documented, expected behavior: Postgres's SSI can abort a read-only transaction that participates in a dangerous dependency cycle with concurrent read-write transactions (Postgres even offers READ ONLY DEFERRABLE specifically to avoid this for read-only work), so it isn't a bug.",
     "references": [
       "PostgreSQL docs: 13.2.3. Serializable Isolation Level",
       "PostgreSQL docs: SET TRANSACTION \u2014 READ ONLY DEFERRABLE"
@@ -879,10 +879,10 @@
     "mode": "scenario",
     "prompt": "An application team ports a Postgres SERIALIZABLE transaction workload to MySQL/InnoDB with SERIALIZABLE isolation, expecting the same failure mode: random 'serialization failure, please retry' errors under contention that the app already catches and retries. Instead, in production the MySQL system shows increased lock waits and occasional deadlocks under the same load, without the expected serialization-failure errors. Why?",
     "options": [
-      "The difference means MySQL's SERIALIZABLE is strictly weaker than Postgres's \u2014 deadlocks indicate real anomalies slipping through that SSI would have caught.",
-      "Postgres implements SERIALIZABLE using Serializable Snapshot Isolation (SSI) \u2014 an optimistic scheme that lets transactions run concurrently and detects dangerous dependency cycles at commit time, aborting one with a serialization-failure error. MySQL/InnoDB implements SERIALIZABLE by converting plain SELECTs into locking reads (as if SELECT ... FOR SHARE) under two-phase locking, so conflicts show up as blocking and, when a cycle forms, as deadlocks \u2014 a pessimistic mechanism with a different failure signature, even though both nominally provide the same isolation guarantee.",
-      "MySQL doesn't actually support SERIALIZABLE isolation \u2014 setting it silently falls back to REPEATABLE READ, and the locking behavior observed is just InnoDB's default gap locking.",
-      "This is a misconfiguration: the SQL standard mandates a specific implementation strategy for SERIALIZABLE, so MySQL's behavior should match Postgres's exactly."
+      "The difference means MySQL's SERIALIZABLE is strictly weaker than Postgres's: the deadlocks are real anomalies slipping through that Postgres's SSI would have caught and reported",
+      "Postgres's SSI is optimistic: it detects dangerous cycles at commit and aborts one transaction. InnoDB uses pessimistic two-phase locking, so conflicts surface as lock waits and deadlocks",
+      "MySQL doesn't actually support SERIALIZABLE: setting it silently falls back to REPEATABLE READ, and the locking seen in production is just InnoDB's default gap locking at that level",
+      "It's a misconfiguration: the SQL standard mandates one implementation strategy for SERIALIZABLE, so a correctly configured MySQL should fail exactly the way Postgres does under contention"
     ],
     "correctIndex": 1,
     "explanation": "Both databases guarantee the same abstract property (transactions behave as if run one at a time), but they get there through opposite mechanisms: Postgres's SSI is optimistic \u2014 it lets transactions proceed and only aborts one at commit time if a dangerous cycle is detected, surfacing as a distinct serialization-failure error \u2014 while InnoDB's SERIALIZABLE is pessimistic, converting ordinary reads into locking reads under strict two-phase locking, so contention shows up as blocking and, when a wait cycle forms, as a deadlock instead. The SSI answer captures this correctly. Claiming MySQL lacks SERIALIZABLE is wrong \u2014 MySQL genuinely supports SERIALIZABLE as a distinct level with this locking-read behavior, it isn't an alias for REPEATABLE READ. Calling it a misconfiguration is wrong because the SQL standard defines isolation levels purely by which anomalies they permit, not by implementation mechanism, which is exactly why Postgres and MySQL can both be spec-compliant with such different internals. Calling MySQL's SERIALIZABLE strictly weaker is wrong \u2014 a deadlock under two-phase locking is a liveness event, not a correctness violation; InnoDB's SERIALIZABLE still prevents the same anomalies as Postgres's, it just fails differently (blocking/deadlock vs. abort-and-retry).",
@@ -899,10 +899,10 @@
     "mode": "scenario",
     "prompt": "A support ticket describes: 'Transaction A reads a row. Transaction B then updates and commits that same row. Transaction A reads the same row again, in the same still-open transaction, and gets the new value.' Which anomaly is this, which isolation levels prevent it, and what's the common misdiagnosis to rule out?",
     "options": [
-      "This anomaly is impossible under READ COMMITTED, since 'read committed' implies every read within the transaction stays consistent throughout.",
-      "This is a non-repeatable read \u2014 not a dirty read, since B's write was committed before A's second read \u2014 and it's exactly what READ COMMITTED permits (it only guarantees each individual statement sees committed data as of that statement, not that repeated statements agree with each other). REPEATABLE READ and SERIALIZABLE both prevent it.",
-      "This is a dirty read, since Transaction A is seeing data that changed while its own transaction was still open.",
-      "This is a phantom read, since a new value appeared in a place where the old one used to be."
+      "This anomaly is impossible under READ COMMITTED, since 'read committed' means every read within the transaction stays consistent with the first one",
+      "A non-repeatable read \u2014 not a dirty read, since B committed before A's second read. READ COMMITTED allows it; REPEATABLE READ and SERIALIZABLE prevent it",
+      "This is a dirty read, because Transaction A is seeing data that changed while its own transaction was still open, and only READ UNCOMMITTED allows that",
+      "This is a phantom read: a new value appeared where the old one used to be, which REPEATABLE READ allows but SERIALIZABLE prevents"
     ],
     "correctIndex": 1,
     "explanation": "The key detail is that B's update was committed before A's second read \u2014 A is not seeing dirty (uncommitted) data at any point, it's seeing two different committed values across two reads of its own transaction, which is the precise definition of a non-repeatable read. The non-repeatable-read answer correctly names it and correctly maps it to isolation levels. Calling it a dirty read misapplies the term, which specifically requires reading data another transaction hasn't committed yet \u2014 that's not what happened here. Calling it a phantom read misapplies the term, which refers to a *set* of rows matching a predicate gaining or losing members between two identical queries, not a single row's value changing. Claiming it's impossible under READ COMMITTED is a common false-friend reading of the name 'READ COMMITTED' \u2014 it only promises that whatever you read was committed at the time you read it, not that two reads of the same row agree with each other; that stronger guarantee is what REPEATABLE READ adds.",
@@ -919,10 +919,10 @@
     "mode": "scenario",
     "prompt": "A checkout flow at a high-traffic e-commerce site needs to safely decrement an inventory count alongside several read-only lookups (product details, tax rates) inside one transaction. An engineer proposes running the whole transaction at SERIALIZABLE to be maximally safe. A colleague objects that this will hurt throughput far more than necessary. What's the better-targeted approach, and why?",
     "options": [
-      "There's no real tradeoff here \u2014 SERIALIZABLE and a targeted row lock produce identical throughput, since every standard RDBMS resolves both down to the same row-level locks internally.",
-      "Keep the transaction at the default isolation level (READ COMMITTED or REPEATABLE READ) and use a targeted locking read (SELECT ... FOR UPDATE) on just the inventory row being decremented \u2014 this serializes exactly the conflicting write without paying SERIALIZABLE's cost (predicate-lock/SSI overhead, commit-time aborts) for the read-only parts of the transaction that don't need it.",
-      "Use READ UNCOMMITTED for the read-only lookups to maximize speed, then run a separate SERIALIZABLE transaction just for the decrement \u2014 splitting into two transactions is safe here since the read-only data (tax rate, product details) has no consistency requirement with the inventory count.",
-      "Use SERIALIZABLE only for the inventory-decrement statement and READ COMMITTED for the rest of the transaction \u2014 isolation level can be set per statement within a single transaction, so this mixes the safety where it's needed with speed elsewhere."
+      "There's no real tradeoff here \u2014 SERIALIZABLE and a targeted row lock produce identical throughput, since every standard RDBMS resolves both down to the same row-level locks internally",
+      "Keep the default isolation level and lock just the inventory row with SELECT ... FOR UPDATE, serializing the one conflicting write without paying SERIALIZABLE's cost on the read-only lookups",
+      "Use READ UNCOMMITTED for the read-only lookups, then a separate SERIALIZABLE transaction for the decrement; splitting is safe because the lookups have no consistency requirement with inventory",
+      "Use SERIALIZABLE for just the decrement statement and READ COMMITTED for the rest \u2014 isolation level can be set per statement inside a single transaction"
     ],
     "correctIndex": 1,
     "explanation": "The right move is to reserve strong protection for the one statement that actually needs it: a SELECT ... FOR UPDATE on the inventory row serializes concurrent decrements via an ordinary row lock, leaving the read-only lookups unaffected by SERIALIZABLE's global overhead. Mixing isolation levels within one transaction is wrong on a factual point: isolation level in Postgres and MySQL is set per-transaction, not per-statement \u2014 you can't downgrade mid-transaction after choosing an isolation level for it. Claiming there's no throughput tradeoff is wrong because SERIALIZABLE's mechanism (whether SSI's predicate locks and dependency tracking in Postgres, or InnoDB's locking-reads-plus-2PL) is materially heavier than a single targeted row lock, and imposes cost (aborts or broader blocking) on statements that never touch the contested row. The READ UNCOMMITTED-plus-separate-transaction approach is wrong because splitting into two transactions reintroduces exactly the kind of cross-transaction inconsistency the original single transaction was meant to avoid, and READ UNCOMMITTED risks reading a tax rate or price that's mid-update and about to be rolled back, which is a real correctness risk for a checkout total, not a harmless shortcut.",
@@ -939,10 +939,10 @@
     "mode": "scenario",
     "prompt": "A meeting-room booking system checks for overlapping bookings before inserting a new one: within a transaction, it runs SELECT * FROM bookings WHERE room_id = 5 AND time_range && :new_range, and if no rows come back, it INSERTs the new booking. The transaction runs at Postgres's REPEATABLE READ. Two users try to book the same room for overlapping times at nearly the same moment. What happens, and why?",
     "options": [
-      "The second transaction's INSERT will always fail with a duplicate-key violation, since the bookings table's primary key prevents two bookings for the same room and time slot.",
-      "Both transactions take their snapshot before either has inserted, so both see zero overlapping bookings and both successfully INSERT \u2014 resulting in a double-booked room. REPEATABLE READ prevents phantom reads within a single repeated SELECT, but it does not prevent this write skew: the anomaly comes from acting on the absence of a row that a concurrent transaction is about to insert, which only true SERIALIZABLE (or an explicit unique/exclusion constraint on the range, or an advisory lock) will catch.",
-      "This scenario can only happen under READ COMMITTED; moving to REPEATABLE READ or SERIALIZABLE is guaranteed to eliminate it entirely with no other application changes.",
-      "Postgres's REPEATABLE READ prevents phantom reads by definition, and since this is exactly a phantom read (a query that would return different rows if repeated, due to a concurrent INSERT), one of the two transactions will automatically block or fail with a serialization error."
+      "The second INSERT fails with a duplicate-key violation, because both bookings share the same room_id and overlapping times",
+      "Both snapshots predate either insert, so both see no overlap and both INSERT, double-booking the room. That's write skew: REPEATABLE READ misses it; SERIALIZABLE or an exclusion constraint catches it",
+      "This scenario can only happen under READ COMMITTED; moving to REPEATABLE READ or SERIALIZABLE is guaranteed to eliminate it entirely with no other application changes",
+      "In Postgres, REPEATABLE READ prevents phantom reads, and a concurrent overlapping INSERT is a phantom, so one transaction blocks or fails"
     ],
     "correctIndex": 1,
     "explanation": "Each transaction only queries the bookings table once before deciding to insert \u2014 neither ever repeats the same SELECT within its own transaction \u2014 so Postgres's phantom-read prevention (which guards a transaction's own repeated query against new matching rows appearing) never actually gets exercised here; the two transactions never see each other's pending insert. This is write skew: each acts correctly on the absence of a conflicting row within its own snapshot, and both commit, together violating the 'no overlapping bookings' invariant. The answer where both snapshots see no overlap is correct, including that only SERIALIZABLE (via predicate-lock dependency detection) or an explicit range constraint/advisory lock actually prevents it. The REPEATABLE READ answer misapplies phantom-read prevention to a case where there's no repeated query to protect. The duplicate-key answer assumes a database constraint (e.g., an exclusion constraint on the time range) that isn't stated to exist \u2014 nothing about a generic primary key prevents overlapping, non-identical time ranges. Claiming it only happens under READ COMMITTED is doubly wrong: REPEATABLE READ does *not* fix this (as shown above), and even SERIALIZABLE only fixes it by aborting one transaction with a serialization error, which still requires the application to catch it and retry \u2014 it isn't guaranteed with zero application changes.",
@@ -959,10 +959,10 @@
     "mode": "scenario",
     "prompt": "An e-commerce API's p99 latency spikes every day around 2pm, right when the BI team runs ad hoc reporting queries directly against the production primary Postgres database. Someone proposes sharding the `orders` table by `customer_id` across multiple databases to spread the load. What's the better fix?",
     "options": [
-      "Add a caching layer in front of the read queries",
-      "Shard the orders table by customer_id across multiple databases",
-      "Vertically scale the primary instance to a bigger machine",
-      "Route the BI/reporting queries to a dedicated read replica (or a proper analytics warehouse), leaving the primary free for OLTP traffic"
+      "Add a caching layer in front of the read queries so repeated reporting queries are served from memory instead of the primary",
+      "Shard the orders table by customer_id across multiple databases, spreading both the reporting load and the OLTP load across more machines",
+      "Vertically scale the primary to a bigger machine so it has enough CPU and memory headroom to absorb the 2pm reporting spike",
+      "Route the BI queries to a dedicated read replica (or an analytics warehouse), leaving the primary free for production traffic"
     ],
     "correctIndex": 3,
     "explanation": "This is a workload-isolation problem, not a capacity problem: the BI team's heavy ad hoc scans contend for I/O, locks, and buffer cache with production writes, so the standard fix is to route that traffic to a dedicated replica (or warehouse) rather than change how data is stored. Sharding by customer_id is wrong because BI queries would still land within whichever shard(s) they touch and contend there just the same \u2014 sharding addresses total data/throughput capacity, not query isolation. Vertically scaling only delays the collision since a bigger machine still shares one buffer cache and lock table between OLTP and OLAP traffic. Caching doesn't help because ad hoc reporting queries are typically unique per report and rarely hit a warm cache.",
@@ -979,10 +979,10 @@
     "mode": "scenario",
     "prompt": "A user uploads a new profile picture, and the request handler immediately redirects them to their profile page, which reads from an asynchronous read replica and shows the old picture for a moment. What's the standard fix for this class of problem?",
     "options": [
-      "For reads immediately following that user's own write, route to the primary (or a replica confirmed caught up) instead of any arbitrary replica",
-      "Switch all replication in the cluster from asynchronous to synchronous",
-      "Increase how frequently the replica polls for changes from the primary",
-      "Add more read replicas to the pool"
+      "Route that user's reads right after their own write to the primary (or a replica known to be caught up) instead of any replica",
+      "Switch all replication in the cluster from asynchronous to synchronous, so every replica is guaranteed to have every write before it's acknowledged",
+      "Make the replica poll the primary for changes more frequently, shrinking the lag window until it's too short for users to notice",
+      "Add more read replicas to the pool so each one handles less load and stays closer to the primary"
     ],
     "correctIndex": 0,
     "explanation": "This is the classic read-your-writes problem: because replication is async, a replica can briefly lag behind the primary, so the standard fix is session-level routing \u2014 send a user's own immediate follow-up reads to the primary or a replica known to have applied their write, rather than to any replica. 'Increase polling frequency' misunderstands replication \u2014 most replicas already stream changes continuously; polling faster doesn't eliminate the fundamentally asynchronous lag window. Adding more replicas doesn't fix consistency at all \u2014 it doesn't reduce lag and can add more replication overhead on the primary. Switching all replication to synchronous does technically guarantee every replica is current, but it's a global overcorrection: every write across the whole cluster now blocks on every replica's ack, tanking write latency and availability, when only this user's follow-up read needed to be consistent.",
@@ -999,10 +999,10 @@
     "mode": "scenario",
     "prompt": "A time-series metrics platform shards its events table by range on event timestamp, so each shard holds exactly one day of data. What's the main operational problem this creates?",
     "options": [
-      "Every query for a single day's events now requires a cross-shard join",
-      "Queries filtering by user_id become completely impossible to run",
-      "The current day's shard absorbs nearly all writes and recent-data queries while older shards sit mostly idle, creating a persistent hot shard",
-      "Data ends up duplicated across multiple shards, wasting storage"
+      "Every query for a single day's events now needs a cross-shard join, since each day's rows end up spread across several shards",
+      "Queries filtering by user_id become impossible to run, because the database can only route queries that filter on the timestamp shard key",
+      "The current day's shard takes nearly all the writes and most recent-data reads while older shards sit idle, creating a persistent hot shard",
+      "Data gets duplicated across multiple shards: events near midnight have to be stored in both neighbouring day-shards, wasting storage"
     ],
     "correctIndex": 2,
     "explanation": "Range-sharding by time is a textbook hotspot pattern: because new writes always target the newest time range, one shard takes all the write load and most of the read load (recent data is queried most), while every older shard is comparatively idle \u2014 wasted capacity that can't easily be reclaimed for the hot shard. It doesn't duplicate data \u2014 range sharding partitions data into disjoint ranges, it doesn't replicate rows across shards. Queries filtering by user_id aren't impossible, just inefficient \u2014 they become scatter-gather across every day-shard since user_id isn't the partition key. And single-day queries don't require cross-shard joins \u2014 by construction, one day of data lives entirely on one shard, so the whole point of range-by-day sharding is that day-scoped queries hit exactly one shard.",
@@ -1019,10 +1019,10 @@
     "mode": "scenario",
     "prompt": "A multi-tenant SaaS product hash-shards its database by tenant_id. One enterprise tenant is roughly 100x larger than all other tenants combined, and its shard is now overloaded while every other shard is comfortably under capacity. What does this reveal, and what's the right fix?",
     "options": [
-      "The hash function is flawed and should be replaced with a better one",
-      "Doubling the number of shards will resolve the imbalance",
-      "Switching to directory-based sharding will automatically resolve the skew",
-      "tenant_id is a reasonable key for data locality, but it can't guarantee even load when tenant sizes are wildly skewed; the large tenant's data needs to be split across multiple shards (e.g., a composite key adding another dimension for that tenant)"
+      "The hash function is flawed and should be replaced with one that spreads keys more evenly, since a good hash keeps every shard's load roughly equal",
+      "Doubling the number of shards will fix the imbalance by spreading tenants across more shards and lowering the load each one has to carry",
+      "Switching to directory-based sharding will fix the skew automatically, since a lookup directory can rebalance data between shards on its own whenever any one of them gets too hot",
+      "tenant_id gives good locality but can't balance wildly uneven tenant sizes; the large tenant's data needs splitting across shards, e.g. with a composite key for that tenant"
     ],
     "correctIndex": 3,
     "explanation": "This is key skew, not a hashing defect: hashing distributes tenants evenly across shards, but it can't split a single tenant's data smaller than one shard, so an outlier tenant that's inherently far larger than the rest will overload wherever it lands regardless of hash quality \u2014 the fix is to further partition that tenant's own data (e.g., tenant_id + entity_type). Blaming the hash function is a misdiagnosis \u2014 the hash is doing its job distributing tenants, the problem is that one tenant's volume alone exceeds a shard's capacity. Directory-based sharding only changes how lookups are routed and rebalanced flexibly \u2014 it doesn't shrink a single tenant's data footprint, so the overloaded shard would still exist under a directory scheme unless that tenant is deliberately split. Doubling shard count under `hash(tenant_id) % N` just relocates the whole oversized tenant to a different single shard \u2014 it doesn't divide that tenant's data, so the hotspot persists on whichever shard it lands on.",
@@ -1039,13 +1039,13 @@
     "mode": "scenario",
     "prompt": "A system shards using `shard = hash(key) % N` across 8 database shards. Growth requires moving to 12 shards. What's the operational consequence of this naive scheme, and what's the standard mitigation?",
     "options": [
-      "Switching to range-based sharding avoids this resharding problem entirely",
-      "No data needs to move, since hash(key) is deterministic regardless of N",
-      "Because the modulo result changes for nearly every key when N changes, almost all keys must be remapped and migrated to a different shard; the standard mitigation is consistent hashing (a hash ring, optionally with virtual nodes) so only roughly 1/N of keys need to move",
-      "Only the keys that land in the 4 newly added shards need to move"
+      "Switching to range-based sharding avoids the resharding problem entirely, since new key ranges can be added at the end without touching any of the existing shards or their data",
+      "No data needs to move, since hash(key) is deterministic and returns the same value for a key no matter how many shards there are",
+      "Changing N changes `hash(key) % N` for most keys (about 2/3 going from 8 to 12), so most data must move; consistent hashing moves only the keys that land on the new shards",
+      "Only the keys that should now land on the 4 new shards need to move; keys on the original 8 shards stay exactly where they are"
     ],
     "correctIndex": 2,
-    "explanation": "`hash(key) % N` ties every key's shard assignment to the exact value of N, so changing N from 8 to 12 changes the remainder for the overwhelming majority of keys, forcing a massive, largely unnecessary data migration \u2014 this is exactly the problem consistent hashing was designed to solve, since a hash-ring scheme only needs to move keys that fall in the newly inserted ring segments (~1/N of keys). 'No data needs to move' is wrong \u2014 hash(key) itself is deterministic, but the shard *assignment* depends on `% N`, which does change. 'Only new-shard keys move' understates the damage \u2014 the naive modulo scheme reshuffles essentially all keys, not just the fraction that ends up on the 4 new shards. And switching to range-based sharding doesn't sidestep resharding pain \u2014 it just trades this problem for a different one (splitting/rebalancing ranges, and potential hotspots on monotonically increasing keys), it doesn't eliminate migration cost in general.",
+    "explanation": "`hash(key) % N` ties every key's shard assignment to the exact value of N, so changing N from 8 to 12 changes the remainder for most keys (roughly two-thirds going from 8 to 12), forcing a massive, largely unnecessary data migration \u2014 this is exactly the problem consistent hashing was designed to solve, since a hash-ring scheme only needs to move keys that fall in the newly inserted ring segments (here about a third of keys: the share the 4 new shards take over). 'No data needs to move' is wrong \u2014 hash(key) itself is deterministic, but the shard *assignment* depends on `% N`, which does change. 'Only new-shard keys move' understates the damage \u2014 the naive modulo scheme reshuffles most keys, not just the fraction that ends up on the 4 new shards. And switching to range-based sharding doesn't sidestep resharding pain \u2014 it just trades this problem for a different one (splitting/rebalancing ranges, and potential hotspots on monotonically increasing keys), it doesn't eliminate migration cost in general.",
     "references": [
       "Designing Data-Intensive Applications (Kleppmann): Partitioning and Rebalancing",
       "Consistent Hashing and Random Trees (Karger et al.) \u2014 overview"
@@ -1059,10 +1059,10 @@
     "mode": "scenario",
     "prompt": "A service scales from 20 to 400 application server instances, and each instance opens its own pool of 20 direct Postgres connections. The database starts refusing connections and overall performance degrades, even though actual query volume didn't grow anywhere near 20x. What's happening, and what's the standard fix?",
     "options": [
-      "8,000 simultaneous connections vastly exceed what Postgres can efficiently run, since each connection maps to its own OS backend process with real memory and CPU overhead; the standard fix is a shared connection pooler (e.g., PgBouncer in transaction mode) sitting between the app tier and the database",
-      "The fix is simply to raise max_connections so Postgres accepts more connections",
-      "Postgres has no meaningful connection limit, so this must be an unrelated issue",
-      "Add more read replicas so connections are spread across more database nodes"
+      "8,000 connections overwhelm Postgres, which runs a separate process per connection; the fix is a shared pooler like PgBouncer between the app tier and the database",
+      "Raise max_connections so Postgres accepts more connections, since the refusals show the configured cap is the only limit being hit and the server has spare capacity",
+      "Postgres has no meaningful connection limit beyond max_connections, so the slowdown must come from an unrelated issue like slow queries",
+      "Add more read replicas so the 8,000 connections are spread across more database nodes, each handling a manageable share of them"
     ],
     "correctIndex": 0,
     "explanation": "Postgres uses a process-per-connection model, so each of those 8,000 connections consumes real memory and adds context-switching/contention overhead independent of whether it's actively running a query \u2014 well beyond the practical connection ceiling (typically low hundreds) \u2014 which is exactly what a shared external pooler like PgBouncer solves by multiplexing many app-side connections onto a much smaller set of real backend connections. Claiming Postgres has no meaningful connection limit is wrong \u2014 the process-per-connection architecture makes per-connection overhead very real and a documented scaling constraint. Simply raising max_connections treats the symptom, not the cause \u2014 it lets more processes spin up, consuming more memory and increasing scheduler contention, which typically degrades performance further rather than fixing it. Adding read replicas doesn't address the core issue either, since each app instance is still opening its own large pool directly against whichever node it talks to \u2014 the fundamentally wasteful many-small-pools pattern remains, it's just spread across more machines.",
@@ -1079,10 +1079,10 @@
     "mode": "scenario",
     "prompt": "A team adopts directory-based sharding \u2014 a lookup table mapping each shard key to its physical shard \u2014 specifically so they can rebalance data flexibly later. What new operational risk does this introduce that range- and hash-based sharding don't have?",
     "options": [
-      "It removes the need for a shard key entirely",
-      "It becomes impossible to move data between shards without downtime",
-      "The directory/lookup service itself becomes a single point of failure and a potential bottleneck, since every query must consult it before it can be routed to the correct shard",
-      "It requires every shard to have an identical schema"
+      "It removes the need for a shard key entirely, since the directory can map any row to any shard without one",
+      "It becomes impossible to move data between shards without downtime, because the whole directory has to be rewritten and redeployed at once whenever any data moves",
+      "The lookup directory becomes a single point of failure and a potential bottleneck, since every query has to consult it before being routed to a shard",
+      "It requires every shard to have an identical schema, whereas range- and hash-based sharding let each shard's schema vary freely"
     ],
     "correctIndex": 2,
     "explanation": "Directory-based sharding trades the algorithmic simplicity of range/hash sharding for an extra hop: a lookup service (or table) that every request must query to find the right shard, which means that service now needs its own availability, latency, and scaling story, or it becomes a bottleneck and single point of failure for the whole system. Claiming it makes data movement impossible without downtime is backwards \u2014 directory-based sharding is specifically valued because remapping is just an update to the lookup table, making rebalancing easier than range/hash schemes, not harder. Requiring identical schemas across shards isn't unique to directory-based sharding \u2014 that's a general expectation for querying uniformity across any sharding approach, not something this scheme specifically imposes. And it doesn't remove the need for a shard key \u2014 the lookup table is still keyed by something (e.g., customer_id); it just adds a layer of indirection on top of that key rather than eliminating it.",
@@ -1099,10 +1099,10 @@
     "mode": "scenario",
     "prompt": "An orders table is hash-sharded by customer_id. A support agent has only an order_id from a ticket (no customer_id) and needs to look up that single order. What does this reveal about the tradeoff, and what's the standard way to handle it?",
     "options": [
-      "This is simply impossible under hash sharding \u2014 order lookups by order_id alone can never be supported",
-      "Resharding the whole table by order_id instead of customer_id solves this without introducing any new tradeoffs",
-      "A global secondary index on order_id gives perfectly consistent, zero-cost lookups across shards",
-      "Because the lookup doesn't include the shard key, the system must either broadcast the query to every shard (scatter-gather) or maintain a secondary lookup index mapping order_id to its shard/customer_id"
+      "It's simply impossible under hash sharding: order lookups by order_id alone can never be supported once the table is sharded by customer_id",
+      "Reshard the table by order_id instead, since single-order lookups by ID are the most common query against an orders table",
+      "Add a global secondary index on order_id, which routes the lookup directly and stays in sync with the shards at no extra write cost",
+      "Without the shard key, the query must either go to every shard (scatter-gather) or use a secondary index mapping order_id to its shard"
     ],
     "correctIndex": 3,
     "explanation": "This is the classic non-partition-key-query problem: since order_id isn't the shard key, the database has no way to know which shard holds the row, so it either fans the query out to all shards (costly at scale) or the team maintains an auxiliary order_id \u2192 shard mapping (a secondary index) to route directly \u2014 a real, well-known cost of sharding by one dimension when other lookup patterns exist. It's not impossible \u2014 it's just more expensive; scatter-gather or a secondary index both make it work, so 'never' overstates the limitation. Resharding by order_id isn't a free win either \u2014 it would break locality for the presumably more common and important customer-scoped queries (e.g., 'show all orders for this customer'), just relocating the same class of problem onto a different access pattern. And a global secondary index isn't free or instantly consistent \u2014 maintaining one across shards typically involves either async replication lag or extra write amplification/cost to keep it current, not a zero-cost guarantee.",
@@ -1119,10 +1119,10 @@
     "mode": "scenario",
     "prompt": "A team's write throughput is nearing the capacity of their single Postgres primary. Someone proposes adding 3 read replicas to handle the load. Will this fix the write bottleneck?",
     "options": [
-      "Yes, because the replicas will share the write load in a round-robin fashion",
-      "Partially \u2014 replicas can absorb writes as long as those writes are idempotent",
-      "Yes, since more replicas mean more total disk I/O bandwidth available to the cluster for writes",
-      "No \u2014 read replicas only offload read queries; all writes still funnel through the single primary, so adding replicas doesn't increase write capacity and adds replication overhead on top"
+      "Yes, because the replicas will share the write load with the primary in a round-robin fashion, with each of the four nodes taking roughly a quarter of all incoming writes",
+      "Partially \u2014 replicas can absorb writes as long as those writes are idempotent, so retries landing on different nodes can't conflict",
+      "Yes, since more replicas mean more total disk I/O bandwidth in the cluster, and write throughput is mostly limited by disk I/O",
+      "No \u2014 replicas only offload reads; every write still goes through the single primary, so they add no write capacity and add replication overhead"
     ],
     "correctIndex": 3,
     "explanation": "In standard async replication, read replicas are read-only copies that receive already-committed writes from the primary \u2014 they don't accept independent write traffic, so throwing more of them at a write-bound primary does nothing for write capacity and in fact adds more replication work the primary must do. Claiming replicas share writes round-robin misunderstands the topology \u2014 in vanilla replication there's exactly one writer (the primary); replicas apply the primary's write stream, they don't originate writes. More total disk I/O across the cluster doesn't help either \u2014 write throughput is bottlenecked by the primary's single-writer capacity, and every write the primary processes must also be replicated out to each replica, which is additional I/O on the primary side, not parallelized capacity. And idempotency is irrelevant here \u2014 whether or not a write can be safely retried has nothing to do with whether a replica structurally accepts independent write traffic; in standard async replication, it simply doesn't, regardless of the write's idempotency.",
@@ -1139,10 +1139,10 @@
     "mode": "scenario",
     "prompt": "A messaging app range-shards its messages table by a monotonically increasing auto-increment message_id, so all new messages land on one 'active' shard, creating a write hotspot. The app's most common query is 'fetch all messages in this conversation.' What shard key change best resolves the hotspot without wrecking that query?",
     "options": [
-      "Keep range-based sharding but assign new messages to descending shards instead of ascending ones",
-      "Hash-based sharding on message_id instead of range-based",
-      "Hash-based sharding on conversation_id (or a composite key including it) \u2014 this spreads write load evenly across shards while keeping every conversation's messages together on one shard",
-      "Switch to directory-based sharding"
+      "Keep range-based sharding but assign new messages to descending shards instead of ascending ones, so the newest writes always land on whichever shard is currently emptiest",
+      "Hash-based sharding on message_id instead of range-based, which spreads the writes out evenly and still keeps each conversation's full history easy to fetch",
+      "Hash-shard on conversation_id (or a composite key including it), spreading writes evenly while keeping each conversation's messages together on one shard",
+      "Switch to directory-based sharding keyed on message_id ranges, so a lookup table can reassign ranges between shards as they fill up"
     ],
     "correctIndex": 2,
     "explanation": "Hashing conversation_id fixes both problems at once: hashing spreads different conversations' write load evenly across shards (no more single active shard), while all messages within one conversation still land on the same shard, keeping the dominant 'fetch this conversation's history' query a single-shard lookup instead of a scatter-gather. Hashing message_id instead would genuinely fix the write hotspot (sequential IDs hash to effectively random shards), but it destroys conversation locality \u2014 a single conversation's messages get scattered across every shard, turning the app's most common query into an expensive scatter-gather across all shards, which is the real tradeoff this option glosses over. Reversing to descending IDs doesn't help \u2014 new writes would still all cluster onto whichever single shard is currently 'newest' under the range scheme, regardless of counting direction; the hotspot is inherent to range-sharding a monotonic key, not to which direction it increments. And directory-based sharding is orthogonal here \u2014 it's about how shard mappings are looked up and rebalanced, not about what key you shard by, so switching to it doesn't address either the hotspot or the query-locality tradeoff.",
@@ -1159,10 +1159,10 @@
     "mode": "scenario",
     "prompt": "Your team migrates from URI path versioning (/v1/orders) to Accept-header content-type versioning (Accept: application/vnd.company.v2+json) to keep URLs stable, citing REST purism. Shortly after, some clients on v2 start intermittently receiving v1-shaped response bodies from behind the company's CDN, even though the CDN configuration hasn't changed. What's the most likely cause, and the standard fix?",
     "options": [
-      "Header-based versioning is fundamentally incompatible with HTTP caching and must be abandoned entirely in favor of URI versioning.",
-      "An intermediate proxy is stripping the custom Accept media type before it reaches the origin, so every request deterministically falls back to v1.",
-      "The v2 response schema is backward-incompatible with v1, so old cached entries are failing validation on the client and silently rendering as v1 data.",
-      "The CDN caches responses keyed only by URL by default; since header-versioned requests to the same URL differ only by the Accept header, the CDN serves a cached v1 response to a v2 client unless the origin sends a Vary: Accept header and every intermediary honors it \u2014 this needs explicit cache-key configuration end-to-end."
+      "Header-based versioning is fundamentally incompatible with HTTP caching, so it has to be abandoned entirely in favor of putting the version number back into the URI path",
+      "An intermediate proxy is stripping the custom Accept media type before it reaches the origin, so every request through that proxy deterministically falls back to the v1 format",
+      "The v2 response schema is backward-incompatible with v1, so old cached entries fail validation on the client and silently render as v1-shaped data instead",
+      "The CDN keys its cache on URL alone, so v2 clients can get a cached v1 response for the same URL; the origin should send Vary: Accept and the CDN's cache key must include Accept"
     ],
     "correctIndex": 3,
     "explanation": "The intermittent, CDN-adjacent nature of the symptom points to caching: most caches key on URL by default and won't differentiate representations by Accept header unless Vary: Accept is set by the origin and honored throughout the caching chain \u2014 this is the well-known operational cost of header/media-type versioning at scale. Abandoning header versioning overcorrects; header versioning works fine with caching once Vary is configured, it's not 'fundamentally incompatible.' A proxy stripping the header would produce a deterministic, 100%-of-the-time failure (every request hits the stripped header), not an intermittent one, so it doesn't fit the observed symptom. The schema-incompatibility answer conflates schema validation with caching \u2014 a cache serving a stale but internally valid v1 response has nothing to do with v2's schema compatibility.",
@@ -1180,10 +1180,10 @@
     "mode": "scenario",
     "prompt": "A team wants to add a new mandatory `tax_id` field to the existing order-creation request schema, enforced with a 400 validation error if it's missing. They call this an 'additive, non-breaking change' because it's a new field, not a removed one. Is that accurate?",
     "options": [
-      "Yes, as long as the new required field is documented in the changelog before the release goes out.",
-      "No, but only because JSON Schema has no way to express optional fields \u2014 this is a limitation specific to JSON, not a general API design issue.",
-      "Yes \u2014 adding any new field, whether required or optional, is by definition additive since existing clients never had to know about it before.",
-      "No \u2014 requiring a brand-new field on an existing request endpoint breaks every current client that doesn't send it; only adding new *optional* request fields, or new *response* fields, is safely additive."
+      "Yes, as long as the new required field is documented in the changelog before the release goes out, so every integrator has advance notice to start sending it",
+      "No, but only because JSON Schema has no way to express optional fields \u2014 this is a limitation specific to JSON, not a general API design issue",
+      "Yes \u2014 adding any new field, whether required or optional, is by definition additive since existing clients never had to know about it before",
+      "No \u2014 a new required request field breaks every existing client that doesn't send it; only new *optional* request fields or new *response* fields are safely additive"
     ],
     "correctIndex": 3,
     "explanation": "A new *required* request field is a breaking change: every existing integration that doesn't send it will start failing validation the moment it ships, regardless of how the change is framed. Calling any new field additive states the common misconception directly \u2014 'required' is exactly the property that turns a new field from additive to breaking; the additive/breaking line runs along optional-vs-required and request-vs-response, not new-vs-old. Blaming JSON Schema misattributes the problem to JSON syntax; JSON Schema (and every serialization format) supports optional fields fine \u2014 the issue is the API contract choosing to require the field, not a format limitation. Relying on the changelog assumes documentation timing fixes a compatibility break; a changelog entry doesn't stop already-deployed client code from being unable to satisfy a new required-field validation rule.",
@@ -1201,10 +1201,10 @@
     "mode": "scenario",
     "prompt": "Your API's v1 is being replaced by v2, and you want a standards-based way to tell clients v1 is deprecated and will stop working in 6 months, without breaking anyone today. What's the correct approach?",
     "options": [
-      "Silently rate-limit v1 traffic with no header signaling, so client teams notice degraded performance and investigate on their own.",
-      "Rely solely on a mention in the release notes/changelog, since HTTP itself has no standard mechanism for signaling API deprecation.",
-      "Return a `Deprecation` header on all v1 responses now, plus a `Sunset` header (per RFC 8594) giving the future date the endpoint stops serving, while also communicating the timeline through docs/changelog/direct outreach in parallel.",
-      "Immediately start returning 410 Gone for v1 endpoints so clients are forced to migrate faster, since a slow deprecation just encourages procrastination."
+      "Silently rate-limit v1 traffic with no header signaling, so client teams notice the degraded performance and investigate the cause on their own",
+      "Rely solely on a mention in the release notes or changelog, since HTTP itself has no standard mechanism for signaling that an API is deprecated",
+      "Send a `Deprecation` header on every v1 response now, plus a `Sunset` header (RFC 8594) with the shutdown date, and announce the timeline in docs and changelogs too",
+      "Immediately start returning 410 Gone for v1 endpoints so clients are forced to migrate faster, since a long deprecation window mostly just encourages client teams to procrastinate"
     ],
     "correctIndex": 2,
     "explanation": "The `Deprecation` header combined with the standardized `Sunset` header (RFC 8594) gives clients a machine-readable, per-response signal of both 'this is deprecated now' and 'this stops working on X date,' which tooling can detect automatically \u2014 paired with human-facing communication, this is the standard practice. Returning 410 Gone immediately defeats the entire purpose of a sunset window by cutting service off immediately, punishing clients instead of giving them time to migrate. Silently rate-limiting v1 is a real but poor anti-pattern: silently degrading service without any explicit signal leaves clients guessing at the cause and gives them no actionable deadline or migration path. The release-notes-only answer is factually wrong \u2014 HTTP does have standardized mechanisms for exactly this (Sunset and Deprecation headers) \u2014 and relying only on a changelog means automated client tooling has nothing to detect.",
@@ -1222,10 +1222,10 @@
     "mode": "scenario",
     "prompt": "Your team adds a new optional field to the GET /users/{id} response, expecting it to be a safe, non-breaking additive change. Days later, several mobile clients start crashing on deserialization. What's the most likely root cause, and how should schema handling be designed going forward to prevent this class of break?",
     "options": [
-      "The mobile clients' generated models use strict decoding (e.g. `additionalProperties: false` or a codec that rejects unrecognized keys), so any unknown field fails parsing; going forward, clients should be built as lenient readers that ignore unrecognized fields, so purely additive server changes stay non-breaking in practice, not just on paper.",
-      "This is expected: adding any field to a response always requires a major version bump, so the field should have shipped under a new API version instead.",
-      "JSON itself doesn't support optional fields, so the new field must have been added as mandatory by mistake.",
-      "The server must have changed the type of an existing field, since a type change is the only kind of response modification that's ever breaking."
+      "Their generated models use strict decoding that rejects unknown keys, so the new field breaks parsing; clients should be lenient readers that ignore unrecognized fields",
+      "This is expected: adding any field to a response always requires a major version bump, so the field should have shipped under a new API version that clients opt into",
+      "JSON itself doesn't support optional fields, so the new field must have been added as mandatory by mistake and clients rejected responses without it",
+      "The server must have changed the type of an existing field, since a type change is the only kind of response modification that's ever actually breaking"
     ],
     "correctIndex": 0,
     "explanation": "Strict client-side deserialization (rejecting unrecognized properties) turns an additive server change into a real-world break \u2014 the fix is designing clients as lenient readers (per Postel's Law) that tolerate unknown fields, since the API contract being additive on paper doesn't matter if consumers can't actually tolerate it. The no-optional-fields claim is simply false about JSON/JSON Schema, which supports optional fields natively. The type-change answer misdiagnoses the scenario \u2014 the stem explicitly says a *new* field was added, not an existing field's type changed, and type changes aren't 'the only' breaking response change (removing fields, tightening enums, etc. are too). Requiring a major version bump reflects an overly rigid position; the accepted industry convention is that new optional response fields are additive and don't require a version bump \u2014 the actual defect here is brittle client-side parsing, not the server's change.",
@@ -1243,10 +1243,10 @@
     "mode": "scenario",
     "prompt": "An API adds a new order status value, `on_hold`, to the existing `status` enum (`pending`, `shipped`, `delivered`, `cancelled`). The team treats this as purely additive/non-breaking since nothing was removed. A downstream client's UI then starts rendering a blank order state whenever `on_hold` appears, because its switch statement has no matching case. Whose responsibility was this, and what's the right way to think about enum evolution?",
     "options": [
-      "The correct fix is to stop using enums altogether and replace every enum field with a boolean flag, since enums should never be extended after initial release.",
-      "This is purely a client-side bug and the API has no responsibility to consider how clients handle enum values, since REST APIs are stateless by definition.",
-      "Adding a new enum value is a breaking change exactly like removing one, so any enum growth should require a major API version bump every time.",
-      "Adding a new enum value is backward-compatible at the wire/schema level, but it's still a semantic contract change \u2014 well-behaved clients need a default/fallback branch for unrecognized values, and producers should document that the enum is 'open' and may grow, if that's the intended contract."
+      "The correct fix is to stop using enums altogether and replace every enum field with a boolean flag, since enums should never be extended after initial release",
+      "This is purely a client-side bug and the API has no responsibility to consider how clients handle enum values, since REST APIs are stateless by definition",
+      "Adding a new enum value is a breaking change exactly like removing one, so any growth in an enum should require a major API version bump every time",
+      "It's wire-compatible but still a semantic contract change: clients need a default branch for unknown values, and producers should document that the enum may grow"
     ],
     "correctIndex": 3,
     "explanation": "Enum growth is wire-compatible but represents an implicit contract with consumers about closed-vs-open value sets; the healthy pattern is client-side default branches plus producer documentation that the set may grow, so no one is caught by surprise. The breaking-change answer overcorrects into treating all enum growth as equivalent to removal, which would force unnecessary major version bumps for the common, genuinely additive case of adding a value. The client-side-only answer misapplies REST's 'stateless' constraint (which is about the server not retaining client session state between requests) to an unrelated concern \u2014 how clients handle unrecognized enum values has nothing to do with statelessness. Replacing enums with booleans is a fabricated absolute rule; converting every enum to a boolean flag doesn't generalize (this enum already has 4+ states) and isn't a recognized industry practice.",
@@ -1263,10 +1263,10 @@
     "mode": "scenario",
     "prompt": "A company has accumulated v1 through v4 of a URI-versioned API, all still serving live production traffic, and the platform team now spends a large share of its engineering time keeping four parallel branches of business logic in sync for every new feature. What does this situation primarily indicate, and what's the standard architectural mitigation at scale?",
     "options": [
-      "The fix is to deprecate and immediately shut off v1 through v3 without a sunset period, since carrying old versions is never worth the engineering cost.",
-      "The team has been bumping the whole-API major version for changes that could have been additive/backward-compatible (or handled via a thin translation layer); the mitigation is reserving version bumps for genuinely breaking changes only, and centralizing any version-to-version translation in an edge adapter layer rather than forking core business logic per version.",
-      "This is an inherent, unavoidable cost of URI versioning specifically, and switching to header-based versioning would have completely eliminated it since header versioning doesn't require maintaining multiple versions.",
-      "This is normal and expected \u2014 large-scale public APIs should always maintain at least four live major versions simultaneously as a best practice."
+      "The fix is to deprecate and immediately shut off v1 through v3 without a sunset period, since carrying old versions is never worth the engineering cost",
+      "Versions were bumped for changes that could have been backward-compatible; reserve bumps for real breaks and translate between versions at the edge instead of forking core logic",
+      "This is an inherent, unavoidable cost of URI versioning specifically, and switching to header-based versioning would have completely eliminated it since header versioning doesn't require maintaining multiple versions",
+      "This is normal and expected \u2014 large-scale public APIs should always maintain at least four live major versions simultaneously as a best practice"
     ],
     "correctIndex": 1,
     "explanation": "Excessive parallel-version maintenance cost is usually a symptom of over-versioning \u2014 bumping a whole major version for changes that didn't need to break anything \u2014 and the standard mitigation is disciplined use of additive changes plus a thin compatibility/translation layer at the edge, so core logic doesn't fork per version. Blaming URI versioning conflates 'where the version identifier lives' (URI vs header) with 'how many versions you maintain' \u2014 header versioning still requires maintaining N contract versions server-side if the team bumps versions just as often; the transport mechanism isn't the cause. Shutting off old versions without a sunset period ignores the real client-migration cost of an unannounced hard cutoff and contradicts standard deprecation practice (sunset periods, advance notice). Calling four live versions normal inverts the lesson of the scenario \u2014 carrying many live major versions is presented here as a costly problem to be minimized, not a best practice to emulate.",
@@ -1284,10 +1284,10 @@
     "mode": "scenario",
     "prompt": "Your team wants to replace offset-based pagination (`?page=2&page_size=50`, response includes `total_count`) with cursor-based pagination (`?cursor=abc`, response includes `next_cursor`) for better performance at scale \u2014 but v1 has thousands of active integrations depending on `page` and `total_count`. What's the best way to evolve this without a hard break?",
     "options": [
-      "Introduce cursor-based pagination as new, additive request/response fields (accept an optional `cursor` param, return `next_cursor` alongside the existing `page`/`total_count` fields when offset params are used), steer new integrations toward cursor-based access, and reserve a hard cutover for a later, separately-announced deprecation once usage data shows offset-based traffic has dropped.",
-      "Keep `total_count` and `page` working exactly as they do today forever, and never offer cursor pagination, since any change to pagination semantics is inherently breaking and there's no safe way to introduce it.",
-      "Move all pagination metadata out of the response body and into a custom response header instead, since headers are never subject to versioning concerns the way body fields are.",
-      "Just change the response shape in place \u2014 cursor pagination is objectively better, so clients will notice the improvement and adapt automatically."
+      "Add cursor pagination as new optional fields alongside `page`/`total_count`, steer new integrations to it, and deprecate offset pagination later once usage data shows it has dropped",
+      "Keep `total_count` and `page` working exactly as they do today forever, and never offer cursor pagination, since any change to pagination semantics is inherently breaking and there's no safe way to introduce it",
+      "Move all pagination metadata out of the response body and into a custom response header instead, since headers are never subject to versioning concerns the way body fields are",
+      "Just change the response shape in place \u2014 cursor pagination is objectively better, so clients will notice the improvement and adapt automatically"
     ],
     "correctIndex": 0,
     "explanation": "Coexistence \u2014 adding cursor-based fields alongside the existing offset-based ones, then sunsetting the old approach later based on real usage data \u2014 lets both paradigms live side by side without breaking anyone today. Changing the response shape in place ignores that clients parse fixed field names and types mechanically; 'better' from an engineering standpoint doesn't make an in-place shape change non-breaking for consumers with fixed deserialization code. Never offering cursor pagination is overly conservative \u2014 it forecloses a genuinely additive coexistence path (new optional params/fields) that would let the API improve without ever breaking existing clients. Moving pagination metadata into headers is a non-sequitur: moving data into headers doesn't exempt it from compatibility concerns \u2014 clients that parse `total_count`/`page` from the body would still break if that data moved elsewhere, and headers are just as much a part of the versioned contract as the body.",
@@ -1325,10 +1325,10 @@
     "mode": "scenario",
     "prompt": "A platform team owns 30 internal microservices, written in Go, Java, and Python, that call each other constantly in latency-sensitive request paths. They want a strict, enforced contract between services (so a service can't silently start returning a field with the wrong type), generated client/server stubs in each language, and lower serialization overhead than JSON. Which API style best fits these internal requirements?",
     "options": [
-      "gRPC with Protocol Buffers, since the .proto schema is the enforced contract and stub generation is built into the toolchain for all three languages",
-      "GraphQL, so each service can request only the fields it needs from its dependencies",
-      "A shared internal JSON-RPC convention documented in a wiki page",
-      "REST with a hand-maintained OpenAPI spec reviewed in PRs"
+      "gRPC with Protocol Buffers: the .proto schema is an enforced contract, and stub generation is built into the toolchain for all three languages",
+      "GraphQL, so each service can request only the fields it needs from its dependencies, which cuts payloads well below what JSON-based APIs allow",
+      "A shared internal JSON-RPC convention documented on a wiki page, so every team follows the same request and response format",
+      "REST with a hand-maintained OpenAPI spec that's reviewed in every PR, so contract changes are always caught by a human before merging"
     ],
     "correctIndex": 0,
     "explanation": "gRPC/Protobuf is correct: the .proto file is compiled into an enforced, typed contract with generated stubs across Go, Java, and Python, and protobuf's binary encoding is more compact and faster to (de)serialize than JSON. GraphQL's value is letting many independent, heterogeneous clients shape their own queries against a shared schema; for fixed, known internal service-to-service calls that flexibility goes unused while you still pay for a resolver/execution layer and JSON serialization, without protobuf's compactness or compile-time codegen enforcement. A hand-maintained OpenAPI spec describes a contract but doesn't enforce it at compile time \u2014 nothing stops a service from drifting from it unless every producer/consumer regenerates and validates against it, and JSON schema validation is runtime-only and slower to serialize than protobuf. A wiki-documented JSON-RPC convention has no machine-enforced contract at all, so type mismatches are only caught at runtime if at all \u2014 directly failing the stated requirement for a strict, enforced contract.",
@@ -1345,10 +1345,10 @@
     "mode": "scenario",
     "prompt": "A public product-catalog API serves the same handful of read-heavy resources (product details, category listings) to millions of anonymous requests per day. The team wants to put a CDN in front of it so repeat requests for the same resource are served from edge cache without hitting origin servers at all. Which API style requires the least extra work to get this for free?",
     "options": [
-      "Any of the three work identically well here since CDN caching is unrelated to the choice of API style",
+      "Any of the three work identically well here, since CDN caching is unrelated to which API style sits behind it",
       "GraphQL, since the schema lets the CDN infer which fields are cacheable per query",
       "gRPC, since HTTP/2 multiplexing lets the CDN cache each stream independently",
-      "REST, using GET requests with resource-specific URLs and standard Cache-Control/ETag headers"
+      "REST, using GET requests with resource-specific URLs and standard Cache-Control/ETag headers, since CDNs cache by URL"
     ],
     "correctIndex": 3,
     "explanation": "REST is correct: standard HTTP/CDN caching keys on method + URL, and REST's resource-per-URL GET design plus Cache-Control/ETag headers is exactly what generic CDNs are built to cache with zero extra machinery. GraphQL typically sends distinct queries as POST bodies to one endpoint URL, so a generic CDN can't distinguish or key on individual queries out of the box \u2014 getting CDN caching for GraphQL requires extra work like persisted queries mapped to GET or custom cache-key logic, not schema inference (CDNs don't parse GraphQL schemas at all). gRPC calls aren't naturally cacheable by generic HTTP caches either \u2014 HTTP/2 multiplexing is about reusing one connection for concurrent streams, not about creating cacheable, idempotent GET-style requests a CDN can key on, so this option confuses a connection-efficiency feature with a caching feature. The 'all equivalent' option is the actual mistake to avoid: the three styles differ sharply in how naturally they map onto standard HTTP caching infrastructure, which is precisely why this is a real selection factor rather than a wash.",
@@ -1405,10 +1405,10 @@
     "mode": "scenario",
     "prompt": "Shortly after launching a public GraphQL API, a team notices a small number of clients sending deeply nested queries (e.g. posts -> comments -> author -> posts -> comments...) that each trigger enormous amounts of backend work from a single HTTP request, degrading service for everyone. Simple per-IP request-count rate limiting doesn't stop it. What's the standard defense?",
     "options": [
-      "Disable introspection so clients can no longer see the schema's nested relationships",
-      "Require all clients to authenticate with an API key",
-      "Enforce query cost/complexity analysis and depth limiting at the GraphQL layer, rejecting or throttling queries above a computed cost threshold",
-      "Switch the public API to gRPC, which doesn't allow client-defined query shapes"
+      "Disable introspection so clients can no longer discover the schema's nested relationships, and so can't build deeply nested queries",
+      "Require every client to authenticate with an API key, so each request is tied to a known client and can be trusted",
+      "Enforce query cost/complexity analysis and depth limits in the GraphQL layer, rejecting or throttling any query over a computed cost budget",
+      "Switch the public API to gRPC, which doesn't let clients define query shapes, so no single request can trigger unbounded work"
     ],
     "correctIndex": 2,
     "explanation": "Query cost/complexity analysis and depth limiting is the standard, widely-used GraphQL-specific defense: it assigns a cost to fields/lists and rejects or throttles queries above a budget, directly addressing the fact that count-based rate limiting can't see how expensive any single request is. Disabling introspection only hides the schema from casual discovery \u2014 it doesn't stop a client who already knows or guesses field names from sending the same expensive nested query, so it's an obscurity measure, not an actual control on backend work performed. Switching to gRPC is a disproportionate architectural response that abandons GraphQL's benefits entirely to solve a request-shaping problem the GraphQL ecosystem already has standard tooling for (cost analyzers, depth limiters). Requiring API-key authentication identifies who is making a request but doesn't cap how expensive any single authenticated request is allowed to be \u2014 a legitimate, authenticated client can still submit one maliciously deep query and cause the same load spike, since this addresses attribution rather than cost.",
@@ -1425,10 +1425,10 @@
     "mode": "scenario",
     "prompt": "A team builds a new internal admin dashboard's backend using gRPC because 'it's faster and more modern than REST,' generating strongly-typed stubs for their Go services. When the frontend team tries to call these services directly from the React app running in the browser, they discover it doesn't work out of the box. What's the mistake?",
     "options": [
-      "Browsers don't expose the low-level HTTP/2 features (trailers, full frame control) that gRPC's wire protocol depends on, so calling gRPC services directly from browser JavaScript isn't supported without a translation layer like gRPC-Web plus a proxy",
-      "gRPC only supports server-to-server communication and cannot be exposed on any public network interface",
-      "gRPC requires clients to be written in a statically typed language, and React/JavaScript can't consume the generated stubs at all",
-      "gRPC requires the client to already have a valid TLS client certificate, which browsers cannot generate"
+      "Browsers don't expose the low-level HTTP/2 features (like trailers) that gRPC's wire protocol needs, so browser JavaScript needs a translation layer such as gRPC-Web plus a proxy",
+      "gRPC only supports server-to-server communication and can't be exposed on any public network interface, so it's limited to calls between services inside the same private network",
+      "gRPC requires clients written in a statically typed language, and React/JavaScript can't consume the generated stubs at all, even through TypeScript",
+      "gRPC requires every client to present a valid TLS client certificate, which browsers can't generate or attach to requests from JavaScript"
     ],
     "correctIndex": 0,
     "explanation": "The real limitation is that browsers don't give JavaScript access to the raw HTTP/2 primitives (like trailers and full frame control) that gRPC's wire protocol needs, so direct browser-to-gRPC calls aren't supported \u2014 teams needing this use gRPC-Web (a restricted subset) fronted by a proxy such as Envoy, or expose a REST/GraphQL facade instead. JavaScript/TypeScript stubs can be generated from .proto files and are used all the time (e.g. in Node.js backends or via gRPC-Web tooling), so the limiting factor isn't the client's language or typing \u2014 it's the browser networking stack specifically. gRPC services are regularly exposed over public networks (many public cloud APIs offer gRPC endpoints), so this isn't a case of gRPC being restricted to server-to-server use; the actual issue here is specifically about direct browser JavaScript access. gRPC calls most commonly use standard one-sided server TLS like any HTTPS traffic \u2014 mutual TLS with client certificates is an optional configuration, not an inherent requirement, and isn't why browser calls fail here.",
@@ -1445,10 +1445,10 @@
     "mode": "scenario",
     "prompt": "Service A is the only consumer of Service B's data, and A's data needs from B are fixed and unlikely to change often. The team building B chooses to expose a GraphQL API 'to be flexible for future clients.' What's the tradeoff they're likely underweighting?",
     "options": [
-      "With only one consumer whose needs are already known and stable, GraphQL's main benefit \u2014 letting many different clients independently shape their own queries \u2014 isn't being used, while the team still pays for building and maintaining a schema/resolver layer, which a direct fixed-contract call (REST or gRPC) would avoid",
-      "GraphQL is strictly slower than any other API style regardless of use case, so this choice is always wrong",
-      "GraphQL cannot be consumed by another backend service, only by browser or mobile clients",
-      "GraphQL requires every consumer to be authenticated via OAuth, adding unnecessary complexity for internal service calls"
+      "With one stable consumer, GraphQL's main benefit (many clients shaping their own queries) goes unused, while the team still has to maintain a schema and resolver layer",
+      "GraphQL is strictly slower than any other API style regardless of use case, so choosing it for a backend-to-backend call is always the wrong decision",
+      "GraphQL can't be consumed by another backend service, only by browser or mobile clients, so Service A would need an extra REST adapter sitting in front of it to call B at all",
+      "GraphQL requires every consumer to authenticate through OAuth, which adds unnecessary token handling and complexity to a purely internal service call"
     ],
     "correctIndex": 0,
     "explanation": "The real tradeoff is architectural mismatch: GraphQL's value comes from letting many independent, heterogeneous clients shape their own queries, but with a single known consumer with stable needs, that flexibility goes unused while the team still bears the ongoing cost of schema design and resolver maintenance \u2014 a simpler fixed-contract call would avoid that cost entirely. Claiming GraphQL is 'strictly slower regardless of use case' is too absolute and isn't the actual issue here \u2014 resolver execution does add some overhead versus a hand-optimized endpoint, but the real problem is unused flexibility and maintenance burden, not a blanket performance verdict. GraphQL is consumed by backend services all the time since it's just HTTP+JSON under the hood \u2014 the mistake isn't a technical inability to call it from another service, it's building unneeded flexibility for a single, stable consumer. GraphQL has no inherent authentication requirement; auth is a separate concern layered on top of any API style (REST, gRPC, or GraphQL), so this isn't specific to GraphQL nor the real problem with the decision described.",
@@ -1465,10 +1465,10 @@
     "mode": "scenario",
     "prompt": "A team used to ship REST API changes as /v2/, /v3/ endpoints. After migrating to GraphQL, they plan to do the same thing: stand up a parallel /v2/graphql endpoint with a new schema every time they need to make a breaking-ish change, and have clients migrate over time. Why does this go against how GraphQL APIs are typically evolved?",
     "options": [
-      "GraphQL automatically migrates all client queries to the latest schema version, making manual versioning endpoints redundant",
-      "GraphQL requires all breaking changes to be communicated exclusively through HTTP status codes rather than schema changes",
-      "GraphQL's convention is to evolve a single schema in place \u2014 adding new fields/types additively and marking old ones with @deprecated \u2014 since clients only request the specific fields they use, so old clients keep working unaffected by additions, unlike REST's whole-payload versioning",
-      "GraphQL schemas are immutable once published, so a /v2/graphql endpoint is technically impossible to create"
+      "GraphQL automatically migrates every client's queries to the latest schema version, which makes separate versioned endpoints redundant",
+      "GraphQL requires breaking changes to be communicated through HTTP status codes rather than schema changes, so a separate versioned endpoint has no proper way to signal them to clients",
+      "By convention, GraphQL evolves one schema in place: add fields and types, mark old ones @deprecated. Since clients request only the fields they use, additions don't break them",
+      "GraphQL schemas are immutable once published, so creating a /v2/graphql endpoint with a different schema is technically impossible"
     ],
     "correctIndex": 2,
     "explanation": "Because GraphQL clients request only the specific fields they need, adding new fields/types to a single evolving schema doesn't break existing clients the way changing a REST response shape does \u2014 the standard practice is additive changes plus @deprecated on old fields, monitored until usage drops to zero, rather than maintaining parallel versioned schemas. Nothing technically prevents standing up another endpoint with a different schema \u2014 it's not 'impossible,' it's just working against the grain of the tooling and conventions (schema registries, deprecation tracking) built around a single evolving schema. There's no such requirement in GraphQL \u2014 breaking changes are communicated via schema deprecation and documentation, and HTTP status codes play the same limited role they do in any API style, not an exclusive versioning role. GraphQL has no automatic query-migration feature; old client queries keep working only because old fields remain present and resolvable until actually removed, not because of any automatic rewriting of client requests.",
@@ -1485,10 +1485,10 @@
     "mode": "scenario",
     "prompt": "A company opens its platform to hundreds of external third-party integration partners who each run their own release schedules, some updating their integration code only once or twice a year. The internal platform team is debating exposing this partner-facing API as gRPC (matching their internal service mesh) versus a REST/JSON API with careful additive versioning. Which is the stronger argument for REST/JSON here?",
     "options": [
-      "gRPC cannot represent optional or additive fields, so any schema change would break every partner immediately",
-      "REST/JSON APIs are inherently more secure than gRPC APIs, which matters more for external partners than internal services",
-      "Partners consuming gRPC would need to adopt the protobuf toolchain and regenerate/redeploy client stubs to pick up schema changes, which is a poor fit for partners who update rarely and don't share the platform team's release cadence or tooling investment \u2014 REST/JSON with careful additive changes lets partners keep working against old response shapes without regenerating anything",
-      "gRPC does not support authentication or authorization, making it unsuitable for any external-facing API"
+      "gRPC can't represent optional or additive fields, so any schema change at all would break every partner's integration the moment it ships",
+      "REST/JSON APIs are inherently more secure than gRPC APIs, and transport security matters far more for external partners on the public internet than for internal services in a mesh",
+      "gRPC would make partners adopt the protobuf toolchain and regenerate stubs to pick up changes, a poor fit for rare updaters; additive REST/JSON keeps their old code working",
+      "gRPC doesn't support authentication or authorization, which makes it unsuitable for any API exposed outside the company's own network"
     ],
     "correctIndex": 2,
     "explanation": "The real, well-documented friction is operational: gRPC changes potentially require partners to regenerate and redeploy protobuf-generated stub code, which is a heavier lift for infrequent, independently-scheduled integrators than parsing an additively-versioned JSON response loosely \u2014 this is a genuine and common reason public/partner-facing APIs skew REST (or GraphQL) while internal meshes skew gRPC. Protobuf explicitly supports optional/additive fields as a core part of its design for backward- and forward-compatible schema evolution, so claiming any change breaks every partner immediately is false \u2014 that's one of protobuf's actual strengths. Transport/serialization choice isn't inherently more or less secure; security depends on the auth, transport encryption (both commonly run over TLS), and authorization model layered on top, which can be implemented well or poorly in either style, so this isn't a real technical distinction. gRPC has well-established support for authentication and authorization (TLS-based auth, token metadata, interceptors) and is used in plenty of external-facing production APIs, so asserting it lacks such support is factually wrong, not just a weak argument.",
@@ -1506,10 +1506,10 @@
     "mode": "scenario",
     "prompt": "A team needs strict ordering of balance-update events per user at high throughput. They're publishing to a Kafka topic with 12 partitions, but keying each message by a random UUID generated per message. Downstream, balance updates for the same user are arriving and being applied out of order. What's the root cause and the correct fix?",
     "options": [
-      "Enable the idempotent producer setting, which will restore per-user ordering",
-      "Key each message by user id instead of a random UUID, so all events for a given user are routed to and processed from the same partition \u2014 Kafka only guarantees order within a partition, never across partitions",
-      "Increase the partition count further so more events can be processed in parallel, which will restore ordering",
-      "Kafka doesn't provide ordering guarantees at all, so switch to RabbitMQ, which does"
+      "Enable the idempotent producer setting, which makes the broker write each user's events in the exact order they were produced",
+      "Key each message by user ID instead of a random UUID, so a user's events all go to one partition \u2014 Kafka only guarantees order within a partition",
+      "Increase the partition count further, so more events are processed in parallel and each user's backlog clears in order sooner",
+      "Kafka doesn't provide any ordering guarantees at all, so the topic should move to RabbitMQ, which preserves strict order across every queue and consumer by default"
     ],
     "correctIndex": 1,
     "explanation": "Kafka guarantees ordering only within a single partition, not across a topic as a whole. Because the messages are keyed by a random UUID, events for the same user are being scattered across all 12 partitions and consumed by different consumer threads with no relative ordering between them; keying by user id routes every event for that user to the same partition, which is what actually restores per-user order. Claiming Kafka has no ordering guarantee at all is wrong \u2014 it has a well-defined per-partition guarantee, which is exactly the mechanism being misused here; RabbitMQ isn't inherently more ordered by default either. Adding more partitions makes the problem worse, not better, since it spreads a random key over an even wider space. The idempotent producer setting deduplicates producer retries at the broker (preventing duplicate writes on retry) \u2014 it has nothing to do with cross-partition message ordering.",
@@ -1526,10 +1526,10 @@
     "mode": "scenario",
     "prompt": "An architect proposes: 'We'll make payment processing exactly-once by having the consumer (1) read a message, (2) process it, (3) call an external, non-transactional payment API, then (4) commit the Kafka offset \u2014 and if any step fails, we retry the whole sequence from step 1.' Why won't this actually prevent duplicate charges, even though the design looks complete?",
     "options": [
-      "Committing the offset before processing (i.e., swapping steps) removes the duplicate-call risk entirely",
-      "Because the design is missing retry logic \u2014 adding more aggressive retries around step 3 will fix it",
-      "Using acks=all on the producer solves this, since it guarantees the message itself is durably written before being read",
-      "If the consumer crashes after step 3 succeeds but before step 4 commits the offset, the message will be redelivered and reprocessed, calling the payment API a second time \u2014 a side effect on an external, non-transactional system can't be made exactly-once just by wrapping it in a retry loop, because there's no atomic coordination between 'call the external API' and 'commit the offset'"
+      "Committing the offset before processing (swapping the steps) removes the duplicate-call risk entirely without losing any messages",
+      "The design is missing retry logic: adding more aggressive retries around the payment call in step 3 makes sure each charge eventually goes through exactly once even under failures",
+      "Using acks=all on the producer solves this, since it guarantees each message is durably written exactly once before any consumer reads it",
+      "A crash after the payment call but before the offset commit means redelivery and a second charge; there's no atomic link between an external API call and the commit"
     ],
     "correctIndex": 3,
     "explanation": "The failure mode is a crash between the external side effect (payment call) and the offset commit that's supposed to mark it as done: on restart, the consumer re-reads the same message and calls the payment API again, because Kafka's offset commit and an external HTTP call to a different system can't be wrapped in one atomic transaction. Adding more retries is actually the mechanism causing the duplicate call, not a fix for it \u2014 retries on redelivery are precisely what re-invokes the non-idempotent payment API. Committing the offset before processing just trades the problem: now a crash during/after processing but after the commit means the message is never retried, so a real payment could silently fail (at-most-once, i.e., message/effect loss) instead of duplicating. acks=all is a producer-durability guarantee (the message won't be lost once acknowledged by replicas) and says nothing about coordinating a consumer's external side effect with its own offset commit. The only real fix is making the external call idempotent itself (e.g., an idempotency key the payment API deduplicates on) or using a transactional outbox pattern.",
@@ -1546,10 +1546,10 @@
     "mode": "scenario",
     "prompt": "You need to replay the last 7 days of clickstream events for reprocessing after a bug fix, and several independent analytics teams each need to read the entire 7-day history at their own pace, potentially more than once. Which broker model fits this requirement, and why do the alternatives fall short?",
     "options": [
-      "It doesn't matter which broker is used, since all of them can be configured to retain messages for 7 days",
-      "SQS standard queues \u2014 fully managed and low-operational-overhead, so it's the right default choice here",
-      "RabbitMQ with a fanout exchange \u2014 since a queue can be bound per consuming team, this gives the same replay capability as Kafka",
-      "Kafka \u2014 its log-based storage retains messages for a configured period independent of consumption, so any number of independent consumer groups can each read (and re-read) the full retained history at their own offset and pace"
+      "It doesn't matter which broker is used, since all of them can be configured to retain messages for 7 days, which is all a replay needs",
+      "SQS standard queues: fully managed with low operational overhead, and its 14-day maximum retention easily covers a 7-day replay",
+      "RabbitMQ with a fanout exchange: binding one queue per consuming team gives every team its own copy and the same full-history replay capability that Kafka offers",
+      "Kafka: its log keeps messages for the retention period regardless of consumption, so each consumer group can read and re-read the full history at its own pace"
     ],
     "correctIndex": 3,
     "explanation": "Kafka's core model is a durable, partitioned log: consumption doesn't delete data, so retention (e.g. 7 days) determines how far back any consumer group can rewind, and multiple groups can independently replay the same log without affecting each other. SQS is a competing-consumers queue model where a message is deleted once a consumer acknowledges it \u2014 there's no native 'multiple independent full-history readers' semantics, and even with maximum retention, once a message is consumed and deleted it can't be replayed to a different team. RabbitMQ's fanout exchange does let multiple queues each get a copy of a message at publish time, but those queues are still transient: once a team's queue consumes and acks a message it's gone, and a team that wasn't already subscribed before the message was published has no way to go back and read history \u2014 there's no log to rewind. It very much matters which broker is used: 'retention' in a queue system (delete-on-ack) is a fundamentally different guarantee from log retention (keep-regardless-of-consumption), and only the latter satisfies the stated replay requirement.",
@@ -1567,13 +1567,13 @@
     "mode": "scenario",
     "prompt": "During a Kafka rolling deployment, consumers in a group repeatedly leave and rejoin, triggering frequent rebalances. The team notices a spike in duplicate order processing specifically during these rebalance windows. What's actually causing the duplicates, and what's the standard mitigation?",
     "options": [
-      "Switch to a much longer auto-commit interval, which will reduce how often rebalances happen",
-      "The duplicates mean the broker itself is storing and delivering duplicate copies of messages",
-      "Add more partitions to the topic so rebalances happen less often during deploys",
-      "When a partition is revoked during a rebalance, any records a consumer had already processed but not yet committed get reprocessed by whichever consumer picks up that partition next, since it resumes from the last committed offset \u2014 mitigate with incremental/cooperative-sticky rebalancing and/or static group membership to reduce disruptive full rebalances, and commit offsets promptly"
+      "Switch to a much longer auto-commit interval, which reduces how often rebalances are triggered while pods restart during the deploy",
+      "The broker itself is storing and delivering duplicate copies of messages, which happens whenever partition leadership moves between brokers in the middle of a rebalance",
+      "Add more partitions to the topic, which spreads consumers more thinly and makes rebalances happen less often during rolling deploys",
+      "Records processed but not yet committed get redone by the partition's next owner; cooperative-sticky rebalancing or static membership, plus prompt commits, reduce it"
     ],
     "correctIndex": 3,
-    "explanation": "A rebalance revokes partition ownership and reassigns it; any records the previous owner had already processed in memory but hadn't yet committed an offset for are, from the broker's point of view, still unprocessed \u2014 so the new owner starts from the last committed offset and reprocesses that window, producing duplicates. This is exactly the kind of disruption cooperative-sticky (or the older eager) rebalancing protocols and static group membership (`group.instance.id`) are designed to reduce, alongside committing offsets more promptly relative to processing. A longer auto-commit interval makes this worse, not better \u2014 it widens the gap between 'processed' and 'committed,' and doesn't reduce how often rebalances are triggered by pods leaving/joining during a deploy, which is driven by session/heartbeat timeouts and group membership changes, not commit frequency. The broker isn't storing duplicate messages \u2014 Kafka's log holds each message once; the duplication here is purely a consumer-side reprocessing artifact of offset semantics. Adding partitions doesn't address rebalance frequency during a rolling deploy; it's unrelated to why pods joining/leaving triggers a rebalance.",
+    "explanation": "A rebalance revokes partition ownership and reassigns it; any records the previous owner had already processed in memory but hadn't yet committed an offset for are, from the broker's point of view, still unprocessed \u2014 so the new owner starts from the last committed offset and reprocesses that window, producing duplicates. This is exactly the kind of disruption incremental cooperative-sticky rebalancing (replacing the older stop-the-world eager protocol) and static group membership (`group.instance.id`) are designed to reduce, alongside committing offsets more promptly relative to processing. A longer auto-commit interval makes this worse, not better \u2014 it widens the gap between 'processed' and 'committed,' and doesn't reduce how often rebalances are triggered by pods leaving/joining during a deploy, which is driven by session/heartbeat timeouts and group membership changes, not commit frequency. The broker isn't storing duplicate messages \u2014 Kafka's log holds each message once; the duplication here is purely a consumer-side reprocessing artifact of offset semantics. Adding partitions doesn't address rebalance frequency during a rolling deploy; it's unrelated to why pods joining/leaving triggers a rebalance.",
     "references": [
       "Apache Kafka documentation: Consumer group rebalancing",
       "Confluent: Cooperative sticky rebalancing (KIP-429)"
@@ -1587,10 +1587,10 @@
     "mode": "scenario",
     "prompt": "A consumer processing an order queue keeps crashing on a single malformed message. Because delivery is at-least-once, the message is redelivered and retried indefinitely, and \u2014 since it's at the head of its partition \u2014 every valid message behind it is now stuck waiting. What's the standard fix?",
     "options": [
-      "After a bounded number of failed processing attempts, route the message to a dead-letter queue/topic and advance past it, so the main queue keeps flowing while the bad message is quarantined for offline inspection",
-      "Increase the retry backoff and timeout so the consumer has more time to succeed on the bad message",
-      "Switch the whole pipeline to at-most-once delivery so retries never happen",
-      "Relax input validation so malformed messages are accepted instead of causing failures"
+      "After a bounded number of failed attempts, move the message to a dead-letter queue and advance past it, so the main queue keeps flowing",
+      "Increase the retry backoff and timeout so the consumer has more time to process the bad message successfully before it gives up",
+      "Switch the whole pipeline to at-most-once delivery, so the bad message is skipped without retries and no data is lost",
+      "Relax input validation so malformed messages are accepted and passed downstream instead of crashing the consumer"
     ],
     "correctIndex": 0,
     "explanation": "A dead-letter queue (DLQ) with a bounded retry count is the standard pattern precisely for this head-of-line blocking problem: once a message has failed processing N times, it's moved off the main path (and the consumer commits/advances past it) so healthy messages behind it aren't starved, while the bad message is preserved for debugging rather than silently dropped. More backoff/timeout doesn't help \u2014 the message is malformed, not transiently slow, so no amount of extra time will make it succeed, and it still blocks everything behind it until it's dealt with. Relaxing validation to 'accept' malformed messages defeats the purpose of validating in the first place and typically just moves the crash downstream to whatever consumes the accepted-but-invalid data. Switching to at-most-once would stop the infinite retry, but at the cost of silently dropping the message with no record of it (and no protection for genuinely transient failures elsewhere in the pipeline, which now also get dropped instead of retried) \u2014 it fixes the symptom by discarding the underlying signal rather than quarantining it.",
@@ -1607,10 +1607,10 @@
     "mode": "scenario",
     "prompt": "A payment consumer reading from SQS is falling behind under load: messages pile up, the visibility timeout expires before processing finishes, and the same message gets redelivered and picked up by a second consumer \u2014 occasionally producing a duplicate charge. What's the correct fix?",
     "options": [
-      "Decrease the visibility timeout so stuck messages get retried and redelivered faster",
-      "Delete each message from the queue as soon as it's received, before processing starts, so it can never be redelivered",
-      "Switch to a FIFO queue, since FIFO queues fix this kind of redelivery race",
-      "Set a visibility timeout with real headroom over the expected processing time (or extend it via the heartbeat/ChangeMessageVisibility API as processing progresses), scale out consumers to work down the backlog, and make payment processing idempotent (e.g., dedup on a payment/idempotency key) as defense in depth"
+      "Decrease the visibility timeout so stuck messages are retried and redelivered sooner, letting another consumer pick up and finish the work while the slow one catches up",
+      "Delete each message as soon as it's received, before processing starts, so it can never be redelivered and nothing is ever lost",
+      "Switch to a FIFO queue, since FIFO's built-in deduplication stops the same message from being processed by two consumers at once",
+      "Give the visibility timeout real headroom over processing time (or extend it while working), add consumers, and make payments idempotent as a backstop"
     ],
     "correctIndex": 3,
     "explanation": "The redelivery is happening because the visibility timeout \u2014 how long SQS hides a message from other consumers after delivery \u2014 is shorter than actual processing time, so a second consumer sees the message as available again while the first is still working on it; giving real headroom (or actively extending visibility as work progresses) closes that window, and scaling consumers addresses the backlog driving processing time up in the first place. Making the payment operation itself idempotent is still worth doing as defense in depth, since 'redelivery under load' is a fundamentally recurring risk in any at-least-once system, not something eliminated 100% by tuning one timeout. Decreasing the visibility timeout makes the race worse, not better \u2014 it shrinks the window before a still-in-flight message is considered visible again, causing even more redelivery under the same slow-processing conditions. FIFO queues add ordering-per-group and a deduplication window for duplicate sends within roughly 5 minutes, but that dedup key is set by the producer at send time \u2014 it doesn't address a consumer-side visibility-timeout race caused by slow processing, so switching queue type alone doesn't fix this bug. Deleting the message immediately on receipt removes the redelivery risk entirely, but at the cost of losing the at-least-once guarantee altogether: if the consumer then crashes mid-processing, the message is gone with no possibility of retry, trading a duplicate-charge bug for a silent-payment-loss bug.",
@@ -1627,13 +1627,13 @@
     "mode": "scenario",
     "prompt": "A Kafka topic has 6 partitions and a single consumer group. The team scales the consumer deployment from 4 pods to 10 pods to handle rising load, but observed throughput stops improving past 6 pods. Why, and what's the actual fix?",
     "options": [
-      "The broker's network is bottlenecked, which is why throughput plateaus at exactly 6 pods regardless of partition count",
-      "Within a consumer group, Kafka assigns each partition to exactly one consumer at a time, so at most 6 consumers can be actively pulling data from a 6-partition topic \u2014 the extra 4 pods sit idle; to scale further you need to increase the partition count",
-      "More pods in the group means more frequent, more disruptive rebalances, and that overhead alone fully explains the plateau",
-      "Kafka fundamentally can't scale consumer parallelism this way, so the group should be moved to RabbitMQ's competing-consumers model instead"
+      "The broker's network is the bottleneck, which is why throughput plateaus at exactly 6 pods no matter how many partitions the topic has",
+      "Each partition goes to one consumer in a group at a time, so only 6 of the 10 pods can be active; to scale further, increase the partition count",
+      "More pods in the group means more frequent and disruptive rebalances, and that overhead alone fully explains the plateau at 6",
+      "Kafka can't scale consumer parallelism this way at all, so the group should move to RabbitMQ's competing-consumers model instead"
     ],
     "correctIndex": 1,
-    "explanation": "Consumer-group parallelism in Kafka is capped by partition count: a partition can be consumed by at most one member of a given group at a time, so with 6 partitions, only 6 of the 10 pods can ever be assigned work \u2014 the rest sit idle, which precisely matches the observed plateau at 6. A generic network bottleneck doesn't explain why the plateau lands exactly at the partition count rather than some other number tied to bandwidth or CPU. More pods do add rebalancing overhead (more members changing group membership), but that's a secondary cost, not the reason throughput caps hard at 6 \u2014 the direct cause is the one-consumer-per-partition assignment rule. It's true that Kafka's per-group parallelism ceiling is the partition count, but the fix for that isn't abandoning Kafka for RabbitMQ's competing-consumers model \u2014 RabbitMQ has different ordering and throughput tradeoffs of its own \u2014 the standard, much simpler fix is increasing the partition count (accepting the operational cost of repartitioning, such as key-to-partition mapping changes for existing keyed data).",
+    "explanation": "Consumer-group parallelism in Kafka is capped by partition count: a partition can be consumed by at most one member of a given group at a time, so with 6 partitions, only 6 of the 10 pods can ever be assigned work \u2014 the rest sit idle, which precisely matches the observed plateau at 6. A generic network bottleneck doesn't explain why the plateau lands exactly at the partition count rather than some other number tied to bandwidth or CPU. More pods do add rebalancing overhead (more members changing group membership), but that's a secondary cost, not the reason throughput caps hard at 6 \u2014 the direct cause is the one-consumer-per-partition assignment rule. Kafka can scale further \u2014 by adding partitions \u2014 so abandoning it for RabbitMQ's competing-consumers model is unnecessary \u2014 RabbitMQ has different ordering and throughput tradeoffs of its own \u2014 the standard, much simpler fix is increasing the partition count (accepting the operational cost of repartitioning, such as key-to-partition mapping changes for existing keyed data).",
     "references": [
       "Apache Kafka documentation: Consumer groups",
       "Confluent: How to choose the number of topic partitions"
@@ -1647,10 +1647,10 @@
     "mode": "scenario",
     "prompt": "An order-processing pipeline needs (a) strict ordering of events per customer and (b) automatic deduplication of retried API Gateway submissions, at a moderate throughput well under SQS FIFO's per-group limits. The team is currently on SQS standard queues and seeing both occasional out-of-order processing and duplicate orders. What should they do?",
     "options": [
-      "Move off SQS entirely onto Kafka, since only Kafka can provide per-key ordering",
-      "Keep the standard queue and add sequence numbers to each message body, having the consumer buffer and sort messages before processing",
-      "Keep the standard queue but ensure there's only a single consumer reading from it \u2014 with one consumer, standard queues become ordered",
-      "Switch to an SQS FIFO queue, using a per-customer MessageGroupId for ordering scoped to each customer, and enable deduplication (content-based, or an explicit MessageDeduplicationId) to cover retried submissions within the dedup window"
+      "Move off SQS entirely onto Kafka, since only Kafka can provide per-key ordering together with automatic deduplication of retried submissions",
+      "Keep the standard queue and add sequence numbers to each message body, having the consumer buffer and re-sort messages into order before processing them",
+      "Keep the standard queue but ensure only a single consumer reads from it, since a standard queue with one consumer delivers messages in order",
+      "Switch to SQS FIFO: a per-customer MessageGroupId for ordering, plus deduplication (content-based or an explicit ID) for retried submissions"
     ],
     "correctIndex": 3,
     "explanation": "SQS FIFO queues are purpose-built for exactly this pair of requirements at moderate throughput: MessageGroupId scopes strict ordering to messages sharing that id (e.g. per customer) rather than requiring one global order, and the deduplication window (content-based or an explicit id) directly addresses retried submissions without any custom logic. Standard queues provide no ordering guarantee by design \u2014 reducing to a single consumer doesn't change that, since standard queues are explicitly documented as best-effort-ordered regardless of consumer count, and a single consumer doesn't even help throughput. Adding sequence numbers and consumer-side buffering/sorting is a workable-looking workaround, but it's substantially more custom code to build and operate correctly (buffering window sizing, handling gaps) than just using FIFO's built-in group ordering, and it does nothing about the separate duplicate-order problem. Moving to Kafka would technically also solve per-key ordering, but it's an unnecessary jump in operational complexity here \u2014 the stated throughput is well within what SQS FIFO handles, and FIFO's built-in dedup window is a closer match to the actual requirement (dedup of retried submissions) than Kafka, which doesn't provide the same automatic short-window dedup semantics out of the box.",
@@ -1668,9 +1668,9 @@
     "prompt": "A team streams high-volume UI click-heatmap events used only to render a rough, few-seconds-refresh density dashboard \u2014 losing an occasional event is invisible to the output. Their current design uses a Kafka producer with acks=all and blocking retry-until-ack per message, plus a consumer that synchronously commits offsets after each processed batch with its own retry logic. Under traffic spikes this creates unacceptable producer-side latency and backpressure. What's the right tradeoff, and why?",
     "options": [
       "Keep at-least-once delivery with retries everywhere by default regardless of the data's actual correctness needs, since losing any data is inherently unacceptable",
-      "Move the whole pipeline to exactly-once semantics (Kafka transactions) to eliminate the backpressure",
-      "Leave the delivery guarantees exactly as they are and just add more partitions and consumers",
-      "Relax delivery guarantees for this data class specifically \u2014 e.g., producer acks=1 (or fire-and-forget) without blocking retry, and periodic/async offset commits on the consumer \u2014 accepting at-most-once, best-effort delivery, since for this workload a dropped event is invisible while the stronger guarantees are only adding latency and backpressure for no real correctness benefit"
+      "Move the whole pipeline to exactly-once semantics with Kafka transactions, which removes the per-message retries that are causing the backpressure",
+      "Leave the delivery guarantees as they are and add more partitions and consumers, which spreads the acknowledgment latency across more parallel workers",
+      "Relax guarantees for this data only: acks=1 or fire-and-forget without blocking retries, plus async consumer commits \u2014 at-most-once is fine for events nobody will miss"
     ],
     "correctIndex": 3,
     "explanation": "Delivery guarantees have a real throughput/latency cost, and that cost should be matched to what the data actually needs: for a coarse, frequently-refreshed density visualization where an occasional missing click is invisible, acks=all-plus-blocking-retry and per-batch synchronous commits are paying full at-least-once tax for a workload that would be fine with at-most-once, best-effort delivery \u2014 relaxing to acks=1/fire-and-forget and async commits removes exactly the latency/backpressure sources described. Defaulting to strong guarantees 'because losing data is always bad' ignores that every guarantee has a throughput cost, and applying it uniformly regardless of whether the workload actually needs it is how systems end up bottlenecked on correctness they don't need. Moving to exactly-once semantics would make backpressure worse, not better \u2014 transactional coordination between producer and consumer adds overhead and latency on top of what's already too slow, it doesn't remove it. Adding partitions/consumers increases parallelism but doesn't touch the actual bottleneck described, which is the per-message synchronous acknowledgment and per-batch synchronous commit latency tax \u2014 that overhead exists per message/batch regardless of how many partitions or consumers are added.",
@@ -1687,10 +1687,10 @@
     "mode": "scenario",
     "prompt": "A payment provider starts returning 500s, and the calling service's circuit breaker trips to \"open,\" cutting off all traffic to it. After a cooldown period, the breaker moves to \"half-open.\" What is the purpose of this half-open state before the breaker returns to \"closed\"?",
     "options": [
-      "It permanently blocks all traffic to the provider until an on-call engineer manually resets the breaker",
-      "It routes all traffic through as normal, but logs the errors instead of blocking anything",
-      "It allows a small number of trial requests through to test whether the provider has recovered, before deciding to fully close the circuit (if they succeed) or reopen it (if they still fail)",
-      "It doubles the timeout duration for all subsequent requests so the provider has more time to respond"
+      "It permanently blocks all traffic to the provider until an on-call engineer manually resets the breaker after confirming the provider is healthy again",
+      "It routes all traffic through as normal but logs the errors instead of blocking, so the team can watch the error rate before fully closing",
+      "It lets a few trial requests through to check whether the provider has recovered, then closes the circuit if they succeed or reopens it if they fail",
+      "It doubles the timeout for all subsequent requests, giving the recovering provider more time to respond before the breaker trips again"
     ],
     "correctIndex": 2,
     "explanation": "Half-open exists specifically to probe recovery safely: a limited number of requests are let through, and their outcome decides whether to close (resume normal traffic) or reopen (go back to blocking) \u2014 this avoids both prematurely flooding a still-broken dependency and staying blocked forever on a recovered one. Requiring manual reset describes some legacy/ops-gated implementations, not what half-open itself does, and most circuit breaker libraries transition automatically based on trial results. Passing all traffic through while just logging errors is not gating at all \u2014 it's monitoring, which defeats the purpose of tripping the breaker in the first place. Doubling the timeout conflates a timeout-tuning tactic with circuit breaking; half-open is about controlling request volume/admission, not about how long each request is allowed to take.",
@@ -1708,10 +1708,10 @@
     "mode": "scenario",
     "prompt": "A downstream database has a brief 2-second hiccup. Thousands of client instances, all using the same fixed retry delay, resend their failed requests at almost the exact same moment, and the resulting spike takes the database down for several minutes \u2014 far worse than the original blip. What is this failure mode called, and what causes it?",
     "options": [
-      "Split-brain, caused by a network partition making two nodes each believe they're the primary",
-      "A noisy neighbor problem, caused by an unrelated co-located workload consuming shared host resources",
-      "A retry storm, caused by many clients' retries lacking backoff/jitter and converging on the recovering service at the same instant, overwhelming it before it can stabilize",
-      "A cache stampede (thundering herd), caused by many clients regenerating the same expired cache entry simultaneously"
+      "Split-brain, caused by the brief hiccup creating a network partition in which two database nodes each believe they're the primary and accept writes",
+      "A noisy neighbor problem, caused by an unrelated co-located workload consuming the database host's shared CPU and disk",
+      "A retry storm: many clients retrying without backoff or jitter converge on the recovering service at once and overwhelm it before it can stabilize",
+      "A cache stampede (thundering herd), caused by many clients regenerating the same expired cache entry at the same moment once the hiccup clears"
     ],
     "correctIndex": 2,
     "explanation": "This is a retry storm: synchronized, un-jittered retries pile onto a service right as it's trying to recover, turning a transient blip into a sustained outage. Split-brain is a distinct consensus/coordination failure where a network partition causes two nodes to each act as leader \u2014 it's about data consistency, not client retry timing. A cache stampede/thundering herd is caused by many clients regenerating the same expired cache key (or waking on the same event) at once, not by retrying a failed request. Noisy neighbor describes resource contention from an unrelated tenant or workload sharing the same host, which has nothing to do with client-side retry behavior.",
@@ -1728,10 +1728,10 @@
     "mode": "scenario",
     "prompt": "A client library retries failed requests with exponential backoff (1s, 2s, 4s, 8s...) but no jitter. Under high load, many concurrent client instances still send their retries in synchronized waves that hit the downstream service at the same moments. Why does adding jitter fix this when backoff alone doesn't?",
     "options": [
-      "Jitter increases the average wait time between retries, which lowers the overall request rate",
-      "Jitter reduces the number of retry attempts a client will make before giving up",
-      "Jitter randomizes each client's actual retry delay, spreading many clients' retries out over time instead of letting them all fire in lockstep at the same computed backoff interval",
-      "Jitter shifts control of retry pacing from the client to the server"
+      "Jitter increases the average wait between retries, which lowers the overall request rate enough for the downstream service to keep up",
+      "Jitter reduces the number of retry attempts each client makes before giving up, so fewer total retries reach the downstream service",
+      "Jitter randomizes each client's retry delay, spreading retries out over time instead of letting every client fire in lockstep at the same backoff interval",
+      "Jitter shifts control of retry pacing from the client to the server, which can then schedule every client's retries into separate time slots so they never collide"
     ],
     "correctIndex": 2,
     "explanation": "Plain exponential backoff still produces the same delay for every client at a given retry attempt, so all clients that failed together stay synchronized wave after wave; jitter randomizes each client's individual delay so those waves spread out and desynchronize. Framing it as 'increasing average wait time' misidentifies the mechanism \u2014 jitter's value is decorrelating timing across clients, not simply making everyone wait longer (some jittered delays are shorter than the unjittered backoff, not just longer). Jitter has nothing to do with how many attempts a client makes; that's governed by a separate retry-budget/max-attempts setting. And jitter doesn't move retry logic to the server \u2014 it's purely a client-side randomization of when the client's own next attempt fires.",
@@ -1748,10 +1748,10 @@
     "mode": "scenario",
     "prompt": "Service A calls B, which calls C. A's client timeout is 5s. B's timeout for calling C is independently configured at 10s. Under load, C takes 8s to respond. A gives up and returns an error to its own caller at the 5s mark, but B \u2014 unaware A already gave up \u2014 keeps waiting and eventually gets a successful response from C at 8s, work that's now wasted since no one is listening for it anymore. What's the fix?",
     "options": [
-      "Remove timeouts from internal service-to-service calls since they run on a trusted internal network",
-      "Propagate a deadline (the caller's remaining time budget) from A through B down to C, so each hop cancels its work once the original caller's deadline has passed, instead of each service using an independently configured fixed timeout",
-      "Configure every service in the chain to use the same fixed timeout value",
-      "Increase B's timeout so it's even longer than 10s, giving C more room to respond"
+      "Remove timeouts from internal service-to-service calls, since they run on a trusted internal network where slow responses always eventually arrive in full",
+      "Propagate a deadline (the caller's remaining time budget) from A through B to C, so each hop stops working once the original caller's deadline has passed",
+      "Configure every service in the chain to use the same fixed timeout value, so every hop gives up at the same moment its caller does",
+      "Increase B's timeout beyond 10s, giving C more room to respond so B's work completes and can be cached for the next request"
     ],
     "correctIndex": 1,
     "explanation": "The root problem is that B's timeout is decoupled from how much time is actually left on A's request; deadline propagation fixes this by passing the remaining budget down the chain so B (and C) know to abandon work once the original caller is already gone, eliminating wasted work and freeing resources sooner. Using the same fixed timeout at every layer doesn't help \u2014 it ignores that each downstream hop needs less time than its caller's total budget, since some time has already elapsed getting there. Increasing B's timeout further only makes the wasted-work window larger, not smaller. And skipping timeouts on 'trusted' internal calls is a common but dangerous anti-pattern \u2014 internal network trust has nothing to do with whether a downstream dependency can be slow or hang, and removing timeouts there leaves that failure mode completely unbounded.",
@@ -1768,10 +1768,10 @@
     "mode": "scenario",
     "prompt": "A service handles requests for both a fast internal 'user profile' API and a slow third-party 'recommendations' API using the same shared thread pool and connection pool. When the recommendations API slows down, profile requests start timing out too, even though they never call the recommendations API. What pattern addresses this, and how?",
     "options": [
-      "Use a bulkhead: give each dependency its own dedicated thread/connection pool, so slow recommendations calls exhaust only their own pool and can't starve resources needed for the unrelated profile API",
-      "Add a cache in front of the recommendations API to speed up responses",
-      "Add a circuit breaker around the recommendations API calls, without changing the thread pool",
-      "Increase the size of the shared thread pool so there are enough threads for both dependencies"
+      "Use a bulkhead: give each dependency its own thread/connection pool, so slow recommendations calls exhaust only their own pool and can't starve the profile API",
+      "Add a cache in front of the recommendations API so its responses come back fast enough that they stop tying up the shared pool's threads",
+      "Add a circuit breaker around the recommendations calls without changing the thread pool, so failing calls are cut off before they can block any other requests",
+      "Increase the size of the shared thread pool so there are always enough threads available for both dependencies, even under load"
     ],
     "correctIndex": 0,
     "explanation": "The bulkhead pattern is the correct fix because the actual problem is resource isolation, not failure detection or speed \u2014 separating pools means one dependency's slowness can only exhaust its own dedicated capacity, leaving the profile API's threads/connections untouched. A circuit breaker on the recommendations calls helps stop new calls to a known-bad dependency, but it doesn't prevent the threads already blocked on in-flight recommendations calls from consuming the shared pool while the breaker is still closed \u2014 it treats the symptom of repeated failures, not the shared-resource contention. Caching addresses latency for the recommendations API specifically, but cache misses or cold starts still consume the shared pool, so contention with unrelated profile requests remains possible. Enlarging the shared pool just delays exhaustion rather than isolating it \u2014 if recommendations calls hang long enough or often enough, a bigger shared pool still gets consumed, and it wastes capacity that isn't actually needed by the unrelated workload most of the time.",
@@ -1789,10 +1789,10 @@
     "mode": "scenario",
     "prompt": "A message queue consumer falls behind producers because a downstream dependency it calls has degraded. The queue keeps growing unbounded, and the consumer's memory usage climbs until it crashes. What resilience pattern should be applied, and how is it different from just adding more consumer instances?",
     "options": [
-      "Retry each failed message immediately to clear the backlog faster",
-      "Apply backpressure: explicitly signal producers to slow down, or shed/reject excess load, once the consumer can't keep up \u2014 this bounds resource use directly, whereas adding consumers only helps if throughput was the bottleneck and doesn't help if the downstream dependency itself is the actual constraint",
-      "Increase the queue's maximum buffer size so it can absorb the growing backlog",
-      "Switch from a queue-based architecture to synchronous request/response calls between producer and consumer"
+      "Retry each failed message immediately so the backlog clears faster, since the sooner messages are retried the sooner the queue shrinks",
+      "Apply backpressure: make producers slow down, or shed excess load, once the consumer can't keep up; more consumers don't help when the downstream dependency is the limit",
+      "Increase the queue's maximum buffer size so it can absorb the growing backlog in memory until the degraded downstream dependency recovers on its own",
+      "Switch from a queue to synchronous request/response calls between producer and consumer, so the backlog moves out of the queue and no longer uses any memory at all"
     ],
     "correctIndex": 1,
     "explanation": "Backpressure is the right pattern because the core issue is an unbounded rate mismatch; explicitly slowing producers or shedding load bounds memory use regardless of whether more consumers would even help, since if the downstream dependency itself is the bottleneck, adding consumer instances doesn't increase real throughput. Retrying failed messages immediately adds more load into the same overwhelmed pipeline without any admission control, and can make the backlog worse rather than better if the downstream dependency is the actual constraint. Raising the queue's buffer size only delays the eventual OOM \u2014 it doesn't fix the underlying rate mismatch, just gives it more room to grow before crashing. Removing the queue and going fully synchronous eliminates the buffering/decoupling that queues provide for absorbing bursts, making the system more fragile to load spikes, not less \u2014 it doesn't apply backpressure so much as remove the shock absorber entirely.",
@@ -1809,10 +1809,10 @@
     "mode": "scenario",
     "prompt": "An e-commerce product page calls a 'recommended products' service to render a widget. That service occasionally becomes slow or unavailable. What's the appropriate resilience strategy for this call, and why is failing fast \u2014 the right approach for a payment authorization call \u2014 not the right approach here?",
     "options": [
-      "Graceful degradation: catch the failure, log/alert on it, and render the page without the recommendations widget (or with a cached/default fallback), since it's a non-critical enhancement \u2014 whereas payment authorization must fail fast because proceeding without a definitive success/failure answer risks money-correctness issues like double charging or shipping unauthorized orders",
-      "Fail fast: return an error page to the user whenever recommendations are unavailable, the same way you would for a failed payment",
-      "Retry the recommendations call with exponential backoff until it eventually succeeds, blocking page render in the meantime",
-      "Apply a circuit breaker that, once open, blocks the entire page from rendering until the recommendations service recovers"
+      "Graceful degradation: log the failure and render the page without the widget (or a cached fallback), since it's non-critical; payments fail fast because guessing risks money errors",
+      "Fail fast: return an error page whenever recommendations are unavailable, exactly as you would for a failed payment, so that failures are never silently hidden from the user",
+      "Retry the recommendations call with exponential backoff until it eventually succeeds, blocking page render in the meantime so the page is always complete",
+      "Apply a circuit breaker that, once open, blocks the entire page from rendering until the recommendations service recovers and the breaker closes"
     ],
     "correctIndex": 0,
     "explanation": "Graceful degradation is right here because the recommendations widget is a non-critical enhancement \u2014 losing it costs some conversion, but proceeding without it is safe; payment authorization is different because proceeding without a definitive answer risks real money-correctness harm (duplicate charges, shipping without payment), which is why fail-fast is the correct call there instead. Treating recommendations failures the same as payment failures conflates a cosmetic enrichment failure with a correctness-critical one, unnecessarily breaking the whole page over a widget. Blocking page render on retries turns a brief availability blip into full page unavailability/latency, which is exactly the outcome graceful degradation is meant to avoid for non-critical features. And using a circuit breaker to gate the entire page misapplies a pattern meant to protect the *recommendations dependency and its callers* from wasted calls, turning it instead into an outage-amplifying gate on unrelated core functionality.",
@@ -1830,9 +1830,9 @@
     "prompt": "A team observes two different failure patterns against an internal auth service: (1) isolated, non-patterned timeouts on about 0.1% of calls, and (2) a full sustained outage lasting several minutes during a deployment rollout. Should the same resilience configuration handle both cases equally well, and if not, why not?",
     "options": [
       "No \u2014 a sustained outage should get more aggressive retries (higher retry counts), since the service is likely to come back at any moment, while the isolated timeouts don't need any handling since they're too rare to matter",
-      "Yes \u2014 wrapping every call in the same circuit breaker + retry configuration handles both cases equally well",
-      "No distinction is needed if a sufficiently long timeout is configured for all calls, since that alone resolves both cases",
-      "No \u2014 isolated transient timeouts are best handled with a small bounded retry (e.g. 1-2 attempts with backoff), since a quick retry is likely to succeed; a sustained outage is better handled by a circuit breaker that trips open after a failure threshold, stopping retries from piling up against a service known to be down, and failing fast until a half-open probe confirms recovery"
+      "Yes \u2014 a single retry policy (e.g. up to 5 retries with backoff) on every call handles both cases equally well, because both are just failed calls",
+      "No distinction is needed if a sufficiently long timeout is configured for every call: a long enough timeout alone resolves both cases",
+      "No \u2014 use a small bounded retry (1-2 attempts with backoff) for rare transient timeouts, and a circuit breaker for the sustained outage so calls fail fast instead of piling up"
     ],
     "correctIndex": 3,
     "explanation": "The two failure modes call for different primary tools because their statistics differ: rare, unpatterned timeouts are exactly what a cheap bounded retry is good at fixing quickly, while a sustained outage means retries are very likely to fail again and just add wasted load, which is what a circuit breaker's fail-fast behavior is designed to prevent. Treating both identically with one static config misses that retries are cheap and effective for one case but harmful and wasteful for the other. Retrying harder during a known sustained outage inverts the right response \u2014 it adds load precisely when the system needs to back off \u2014 while dismissing the rare transient timeouts as not worth handling ignores that, however rare, each one is still a real user-facing failure a single retry would likely fix cheaply. A longer timeout doesn't distinguish the two cases at all; it mainly delays failure detection and ties up resources longer during the outage, without reducing retry pressure or providing any fast-failure behavior.",
@@ -1849,10 +1849,10 @@
     "mode": "scenario",
     "prompt": "A backend automatically retries a failed 'charge customer's credit card' call using the same generic exponential-backoff-with-circuit-breaker resilience library it uses for read-heavy internal service calls. A customer reports being charged twice. Independent of adding an idempotency key, what's the resilience-pattern-level mistake here?",
     "options": [
-      "The circuit breaker's failure threshold was set too high, letting too many failed attempts through before tripping",
-      "Retries were applied uniformly regardless of whether the operation was safe to retry; a resilience policy should only automatically retry operations that are idempotent (or made idempotent via a dedup mechanism) \u2014 a mutating call like a charge needs that guarantee before a generic retry policy is layered on top of it",
-      "The retry logic should have used a shorter timeout so the client would know sooner whether the charge succeeded",
-      "The backoff schedule retried too quickly; slowing it down would fix the double charge"
+      "The circuit breaker's failure threshold was set too high, letting too many failed attempts through before tripping and stopping the duplicate charge",
+      "Retries were applied to every operation alike; a policy should auto-retry only idempotent operations (or ones made idempotent), and a charge isn't one until that's guaranteed",
+      "The retry logic should have used a shorter timeout, so the client would learn sooner whether the original charge had succeeded before retrying",
+      "The backoff schedule retried too quickly; spacing the retries much further apart would have given the first charge enough time to land and prevented the double charge"
     ],
     "correctIndex": 1,
     "explanation": "The real mistake is applying a generic retry-everything policy without checking whether the operation is safe to repeat \u2014 retries directly cause duplicate side effects on non-idempotent writes, which is a resilience-pattern design flaw independent of any idempotency-key fix layered on top. A slower backoff schedule addresses pacing, not the core problem, which is that repeating the side effect at all is unsafe \u2014 retrying twice a minute apart still double-charges the customer. A lower circuit breaker threshold affects how many failed attempts happen before the breaker trips, but it doesn't undo a charge that already succeeded on an earlier attempt before the breaker ever tripped \u2014 threshold tuning isn't what causes or prevents duplicate side effects. A shorter timeout doesn't tell you whether the original request actually completed server-side before the client gave up; it can make things worse by aborting and retrying requests that would have succeeded on their own, and it doesn't address the underlying non-idempotency issue at all.",
@@ -1867,12 +1867,12 @@
     "id": "backend-engineering-0094",
     "topic": "backend-engineering",
     "mode": "scenario",
-    "prompt": "A request path is API Gateway -> Service A -> Service B -> Service C. Each layer independently retries up to 3 times on failure, with its own backoff, unaware of the other layers' retries. Service C becomes slow and starts erroring under load. What actually happens as a result of the retry configuration, and what's the fix?",
+    "prompt": "A request path is API Gateway -> Service A -> Service B -> Service C. Each layer independently makes up to 3 attempts on failure, with its own backoff, unaware of the other layers' retries. Service C becomes slow and starts erroring under load. What actually happens as a result of the retry configuration, and what's the fix?",
     "options": [
-      "Nothing problematic happens, since each layer's retries are independently bounded to 3 attempts",
-      "The fix is to remove retries entirely from every layer, relying only on timeouts and circuit breakers",
-      "Retry amplification occurs: a single original request can fan out into a multiplicative number of actual calls to C (up to 3 x 3 x 3 = 27) as each layer retries independently, worsening the very overload causing C's failures; the fix is to retry at only one layer (typically the outermost, or the layer closest to the failure) and have inner layers propagate the failure or honor a shared retry budget instead of retrying blindly",
-      "The fix is to increase Service C's capacity/instance count so it can absorb the retried load"
+      "Nothing problematic happens, since each layer's retries are independently bounded to 3 attempts, which keeps the total load on C bounded too",
+      "Remove retries entirely from every layer and rely only on timeouts and circuit breakers \u2014 retries are never safe in a multi-hop chain",
+      "Retry amplification: independent retries let one request become up to 27 calls to C, deepening its overload; retry at a single layer and let the others pass failures up",
+      "Increase Service C's capacity and instance count so it can absorb the retried load, since the retries are only exposing that C was under-provisioned for its normal peak load"
     ],
     "correctIndex": 2,
     "explanation": "Retry amplification is the real effect: bounding retries per-layer doesn't bound them in aggregate, so a single client request can multiply into dramatically more actual load on C exactly when C is already struggling \u2014 the fix is coordinating retries so only one layer in the chain actually retries, with other layers propagating the failure or respecting a shared retry budget. Claiming nothing problematic happens ignores this multiplicative compounding across layers \u2014 each layer being bounded individually is exactly what hides the aggregate blowup. Scaling up C's capacity treats a symptom rather than the structural cause, and doesn't reliably solve it either, since uncoordinated retries can still amplify faster than capacity is added during any degradation, however small. Removing retries everywhere overcorrects: it surrenders the ability to transparently absorb genuinely transient single-hop blips, turning problems a single well-placed retry would have quietly fixed into user-facing errors instead.",
@@ -1889,10 +1889,10 @@
     "mode": "scenario",
     "prompt": "A service uses the classic cache-aside pattern: on write, it updates the database and then deletes the corresponding cache key so the next read repopulates it from the source of truth. Under high concurrency, users occasionally see stale data persist for the entire TTL window even though the delete-on-write logic is verified to run correctly on every write. What's the classic race condition responsible for this?",
     "options": [
-      "A concurrent read that started before the write (and already missed the cache) can finish reading the old value from the database and write it into the cache *after* the write's delete has already run, repopulating the cache with stale data until the next expiry",
-      "Delete-on-write is the wrong approach; the fix is to have writes update the cache directly with the new value instead of deleting the key",
-      "This is a premature-eviction problem \u2014 the key is being evicted due to memory pressure before its TTL, so increasing cache memory will fix it",
-      "The cache's TTL is set too long; shortening the TTL will close the race window"
+      "A read that missed the cache before the write can finish reading the old value and put it back in the cache *after* the write's delete, leaving stale data until expiry",
+      "Delete-on-write is the wrong approach; writes should update the cache directly with the new value instead of deleting the key, which removes the race window completely",
+      "This is premature eviction: the key is being evicted under memory pressure before its TTL expires, so giving the cache more memory will stop the stale reads",
+      "The cache's TTL is set too long; shortening it will close the race window, because a short-lived key can't hold onto stale data"
     ],
     "correctIndex": 0,
     "explanation": "The race is a slow, already-in-flight read that missed the cache before the write happened, finishing after the write's delete and re-inserting the pre-write value \u2014 from then on every read hits that stale value until it naturally expires. Updating the cache on write instead of deleting it doesn't fix this: a slow read can still overwrite a newer value with an older one, which is exactly why systems like Facebook's memcache deployment explicitly recommend delete over set. Shortening the TTL only bounds how long the stale value survives once the race occurs; it doesn't prevent the race from happening. Blaming eviction misdiagnoses the cause \u2014 the key isn't being evicted early, it's being correctly deleted and then re-populated with the wrong value by an overlapping read.",
@@ -1912,7 +1912,7 @@
       "Use a very short TTL (e.g. 1 second) for everything instead of building invalidation logic, since it approximates real-time consistency uniformly",
       "Use explicit invalidation everywhere, for both datasets, since it's strictly more correct than TTL-based expiry",
       "Use the same long TTL for both, since a single uniform policy keeps the system simpler and reduces load on the origin DB",
-      "Explicit invalidation on write (near-zero staleness tolerance) for inventory counts; a long TTL (high staleness tolerance) for product descriptions"
+      "Explicit invalidation on write for inventory counts (near-zero staleness tolerance) and a long TTL for product descriptions, since they rarely change"
     ],
     "correctIndex": 3,
     "explanation": "The right design matches invalidation strategy to staleness tolerance: inventory during a flash sale needs correctness guarantees an explicit invalidate-on-write can provide, while rarely-changing descriptions can tolerate a long TTL and gain a much higher cache hit rate. A single long TTL for both ignores that inventory staleness directly causes overselling \u2014 it optimizes for simplicity at the cost of correctness where correctness matters most. Explicit invalidation everywhere sounds more rigorous but is actually more fragile in practice \u2014 every write path (migrations, batch jobs, other services) must reliably trigger it, and missed invalidations for low-value data like descriptions aren't worth that operational cost. A blanket 1-second TTL still leaves a real staleness window during a flash sale (where even seconds matter) while needlessly hammering the origin DB for the descriptions that almost never change.",
@@ -1929,10 +1929,10 @@
     "mode": "scenario",
     "prompt": "Service A owns User data and writes it to its own database and Redis cache. Services B, C, and D each read User data from Service A's API and keep their own local in-process caches for performance. When a user updates their profile in Service A, B, C, and D keep serving stale cached copies for several minutes. What's the standard scalable fix for this cross-service staleness?",
     "options": [
-      "Have Service A synchronously call a cache-invalidation endpoint on B, C, and D during the write request, before returning success",
-      "Service A publishes a domain event (e.g. 'UserUpdated') to a message bus on write; B, C, and D each subscribe and invalidate or refresh their own local cache in response",
-      "Shrink B, C, and D's local cache TTLs to a few seconds so any staleness resolves itself quickly",
-      "Have B, C, and D each poll Service A's API on a tight interval to check whether the data has changed"
+      "Have Service A synchronously call a cache-invalidation endpoint on B, C, and D during the write request, so all caches are cleared before it returns success",
+      "Service A publishes a domain event (e.g. 'UserUpdated') to a message bus on write, and B, C, and D each subscribe and invalidate their own local cache",
+      "Shrink B, C, and D's local cache TTLs to a few seconds so any staleness resolves itself quickly without extra infrastructure",
+      "Have B, C, and D each poll Service A's API on a tight interval to detect changes, so no new messaging system has to be introduced"
     ],
     "correctIndex": 1,
     "explanation": "Event-driven invalidation via a message bus lets each downstream service invalidate on its own schedule without coupling Service A's write path to their availability, and it scales to any number of subscribers. Tight polling still leaves a staleness window equal to the poll interval and multiplies load on Service A roughly by the number of pollers times poll frequency, which doesn't scale. Shrinking TTLs bounds staleness but doesn't eliminate it, and if pushed low enough to matter, it drives cache hit rate down and origin load up dramatically \u2014 defeating the purpose of caching. Synchronous cross-service invalidation calls couple Service A's write path to the liveness of B, C, and D \u2014 if any one is slow or down, Service A's writes now fail or block, which is a classic cascading-failure antipattern that violates service autonomy.",
@@ -1949,10 +1949,10 @@
     "mode": "scenario",
     "prompt": "A system uses cache-aside with delete-on-write, but the database has an asynchronously-replicated read replica. Occasionally, a read that repopulates the cache right after an invalidation hits the still-lagging replica, caching stale data again for a full TTL. What's a known mitigation pattern for exactly this timing issue?",
     "options": [
-      "Increase the cache TTL so this kind of stale repopulation matters less often",
-      "Immediately retry the cache delete many times in a tight loop right after the write, with no delay between retries",
-      "Eliminate the read replica and route all reads to the primary database instead",
-      "Delete the cache key again after a short delay (a few hundred milliseconds to a couple seconds) following the write \u2014 the 'delayed double delete' pattern \u2014 betting that replication lag will have resolved and any repopulation race will have already played out by then"
+      "Increase the cache TTL, since a longer-lived entry is less likely to be repopulated from a lagging replica",
+      "Retry the cache delete many times in a tight loop right after the write, with no delay, so any stale repopulation is cleared immediately",
+      "Eliminate the read replica and route all reads to the primary database instead, accepting the extra load on it",
+      "Delete the key again after a short delay (a 'delayed double delete'), by which time replica lag and any repopulation race have usually played out"
     ],
     "correctIndex": 3,
     "explanation": "The delayed double delete issues a second invalidation after a deliberate pause, timed so that replication lag has likely resolved and any repopulation race from a stale replica read has already occurred and can be cleared out \u2014 this is a documented real-world mitigation for exactly this class of race. Eliminating the replica is a heavy-handed overcorrection that removes read scaling entirely just to sidestep a narrow caching race, when only the caching layer needed adjusting. Retrying the delete with no delay misunderstands the mechanism \u2014 the problem is replication *lag* (a timing issue), so retrying instantly doesn't give the replica any more time to catch up before the next repopulation could still read stale data. Increasing the TTL makes the underlying problem worse rather than better, since it extends how long the stale value, once cached, would persist.",
@@ -1969,10 +1969,10 @@
     "mode": "scenario",
     "prompt": "A social app uses event-driven cache invalidation: writes publish an 'invalidate' event asynchronously, and consumers clear the relevant edge/CDN cache entries, typically within about 200ms. A user updates their bio and immediately refreshes the page; occasionally they still briefly see their old bio. Product requires that the writer specifically must always see their own update immediately, though a brief delay for other viewers is acceptable. What should the team do?",
     "options": [
-      "Make invalidation synchronous for every write, blocking until every edge/CDN node has confirmed the cache is cleared before the write request returns",
-      "Tell the user to hard-refresh their browser to bypass the cache",
-      "Accept that global invalidation propagation is inherently asynchronous and has lag, and instead special-case the writer: route their own reads for a short window after their write to the origin/DB (or otherwise bypass the cache for just that user), rather than trying to make the invalidation event itself instantaneous",
-      "Shorten the CDN edge cache TTL to 1 second globally"
+      "Make invalidation synchronous for every write, blocking until every edge/CDN node has confirmed the cache is cleared before the write request returns its success response to the user",
+      "Tell the user to hard-refresh their browser after editing, since a hard refresh bypasses every cache between them and the origin",
+      "Accept that invalidation propagates with lag and special-case the writer: for a short window after their write, route their reads to the origin or otherwise bypass the cache for them",
+      "Shorten the CDN edge cache TTL to 1 second globally, so no user, including the writer, can ever see data more than a second old"
     ],
     "correctIndex": 2,
     "explanation": "Since only the writer needs a strict read-your-own-writes guarantee, the scalable fix is special-casing that one user's subsequent reads (bypassing the cache or routing to origin briefly) rather than trying to make the entire system's propagation instantaneous. Making all invalidation synchronous would force every write globally to block on confirmation from every edge node, sacrificing latency and availability for all users just to fix a requirement that only applies to the writer. Shortening the TTL to 1 second everywhere still leaves a real, if smaller, race window that doesn't reliably guarantee the writer sees their own update, while multiplying origin load for every user, not just the one who needs the guarantee. Telling the user to hard-refresh conflates the browser's local HTTP cache with the CDN/edge cache described in the scenario \u2014 a hard refresh clears the former, not the latter, so it wouldn't reliably fix the staleness being described.",
@@ -1989,10 +1989,10 @@
     "mode": "scenario",
     "prompt": "A team is building a real-time view-count/like-count system. They want very high write throughput and low write latency, and they're explicitly willing to lose the last few seconds of increments in the rare event of a crash, in exchange for not hitting the database on every single increment. Which caching write strategy fits, and what's the tradeoff they're accepting?",
     "options": [
-      "Write-behind (write-back) \u2014 increments land in the cache/memory first and are asynchronously batched and flushed to the database later; accept that a crash before a flush loses the not-yet-flushed increments",
-      "Cache-aside \u2014 the cache is only populated on a read miss",
-      "Write-through \u2014 every write is synchronously committed to both cache and database before returning",
-      "Write-around \u2014 writes go straight to the database, bypassing the cache, which is populated only on a later read"
+      "Write-behind: increments hit the cache first and are batched to the database asynchronously, so a crash before a flush loses the latest increments",
+      "Cache-aside: the cache is populated only on a read miss, so increments go to the database but reads of the counts stay fast",
+      "Write-through: every write is committed to both cache and database synchronously before returning, so not a single increment is ever lost, even in a crash",
+      "Write-around: writes go straight to the database, bypassing the cache, which is populated only on a later read of the count"
     ],
     "correctIndex": 0,
     "explanation": "Write-behind is designed exactly for this tradeoff: batching writes in memory and flushing asynchronously maximizes throughput and minimizes write latency, at the cost of losing any unflushed increments if the cache crashes first \u2014 which the team has explicitly said is acceptable here. Write-through gives durability but blocks every write on a synchronous database commit, directly defeating the stated goal of high throughput and low write latency. Cache-aside is a read-oriented pattern \u2014 it doesn't batch or accelerate writes at all, so increments would still go straight to the database exactly as if no caching existed, which doesn't solve the write-load problem they're trying to fix. Write-around also sends every write directly to the database, bypassing the cache the same way cache-aside does on the write path; it only differs in when the cache gets populated on a later read, so it does nothing to reduce write throughput pressure either.",
@@ -2008,10 +2008,10 @@
     "mode": "scenario",
     "prompt": "A team has explicit cache invalidation wired into every write path in their application code, and considers it fully sufficient \u2014 so they set the cache TTL to effectively infinite to maximize hit rate. Months later they discover stale data being served indefinitely for records changed by a database migration script, a support engineer's direct SQL fix, and an offline batch job \u2014 none of which went through the application's invalidation logic. What does this best illustrate, and what should they do?",
     "options": [
-      "Explicit invalidation is only as complete as its coverage of every write path; since it's practically impossible to guarantee every mutation (migrations, ad hoc admin queries, other services, batch jobs) goes through the application's invalidation code, a bounded TTL should be kept as a safety-net backstop even when explicit invalidation is used",
-      "The fix is to make the TTL even longer, since the problem only became visible because staleness was eventually noticed",
-      "Their invalidation code has a bug in the application's normal write path and simply needs to be fixed so it's called correctly",
-      "This shows explicit invalidation is inherently unreliable and should be abandoned in favor of pure TTL-based expiry everywhere"
+      "Explicit invalidation only covers writes made through the app; migrations, direct SQL and batch jobs skip it, so keep a bounded TTL as a safety net",
+      "Make the TTL even longer, since the problem only became visible because the stale data eventually got noticed by someone",
+      "Their invalidation code has a bug in the application's normal write path and simply needs to be fixed so it's called on every write",
+      "This shows explicit invalidation is inherently unreliable and should be abandoned entirely in favor of pure TTL-based expiry on every key in the system"
     ],
     "correctIndex": 0,
     "explanation": "The core lesson is that explicit invalidation can only cover mutations that actually flow through the code paths wired to trigger it \u2014 out-of-band writes (migrations, direct SQL, other services) will always exist in practice, so a bounded TTL acting as a backstop is standard practice even alongside good invalidation coverage. Concluding the application's invalidation code is buggy misdiagnoses the cause \u2014 the staleness came from writes that never touched the application layer at all, so no fix to the app's normal write-path invalidation logic would catch migrations or direct SQL edits. Abandoning explicit invalidation for pure TTL everywhere overcorrects: explicit invalidation is still valuable and gives fast freshness for the large majority of writes that do go through the app, and discarding it reintroduces staleness windows that were previously avoidable. Making the TTL longer is backwards \u2014 a longer TTL makes indefinite staleness from out-of-band writes worse, not better, since it's the exact opposite of the safety-net bound that's actually needed.",
@@ -2028,10 +2028,10 @@
     "mode": "scenario",
     "prompt": "Your product catalog service caches each product page for 10 minutes. The cache entry for a top-selling item expires, and in the ~50ms it takes to rebuild it from the database, 2,000 concurrent requests for that same item all miss the cache and hit the database at once, causing a brief CPU spike. The data doesn't need to be perfectly fresh. What's the standard fix?",
     "options": [
-      "Add more database read replicas so the DB can absorb the concurrent spike",
-      "Increase the TTL so this key expires less often",
-      "Switch to a write-through cache instead of a TTL-based one",
-      "Use request coalescing: a per-key lock (e.g. Redis SETNX, or a 'singleflight' pattern) so only the first request that misses recomputes the value while the other 1,999 wait and reuse that result"
+      "Add more database read replicas so the database tier can absorb the concurrent spike whenever a popular key expires",
+      "Increase the TTL so this key expires less often, which makes the spike rare enough that the database can absorb it",
+      "Switch to a write-through cache instead of a TTL-based one, so the entry is always refreshed by writes and never has to be rebuilt after a miss at all",
+      "Request coalescing: a per-key lock (e.g. Redis SETNX or 'singleflight') lets only the first miss recompute while the rest wait and reuse its result"
     ],
     "correctIndex": 3,
     "explanation": "Request coalescing collapses N concurrent misses on the same key into a single recompute, which is exactly what a stampede needs. Raising the TTL only lowers how often the spike occurs, it doesn't stop the spike when the key does expire, and it widens the staleness window. Adding read replicas treats the symptom (DB can't absorb a burst) rather than the cause (uncoordinated concurrent misses), and is costly to scale for every hot item. A write-through cache changes when the cache gets populated, but doesn't coordinate concurrent misses caused by memory-pressure eviction or a cold start, so the same pile-up can still happen.",
@@ -2048,10 +2048,10 @@
     "mode": "scenario",
     "prompt": "During a deploy, an engineer sets a fixed 60-second TTL on every entry in a Redis response cache. Every 60 seconds, a huge fraction of keys expire at the same instant, and the origin gets a periodic tidal wave of traffic \u2014 even though no single key is especially popular. What's the standard fix?",
     "options": [
-      "Add more cache memory/nodes to absorb the periodic spike",
-      "Switch from TTL-based expiration to an LRU eviction policy",
-      "Add a per-key lock so only one request recomputes each key",
-      "Add random jitter to each key's TTL (e.g. 60s +/- up to 15s) so expirations spread out over time instead of clustering at one instant"
+      "Add more cache memory or nodes so the cluster can absorb the periodic spike without passing it on to the origin",
+      "Switch from TTL-based expiration to an LRU eviction policy, so keys leave the cache gradually as memory fills instead of all at once",
+      "Add a per-key lock so only one request recomputes each key, which collapses each 60-second wave into a single origin query",
+      "Add random jitter to each key's TTL (e.g. 60s \u00b1 up to 15s) so expirations spread out over time instead of clustering at one instant"
     ],
     "correctIndex": 3,
     "explanation": "Jittering the TTL desynchronizes when each key expires, turning one tidal wave into a smooth, spread-out trickle. Switching to LRU changes what triggers eviction (memory pressure vs. time) but throws away time-based freshness guarantees and doesn't address a set of keys that were all populated together expiring together. More cache capacity helps the cache hold more, it doesn't stop the origin from getting hit by every one of those thousands of simultaneous DB queries. Per-key locking (coalescing) only limits duplicate work for a single key that many requests share \u2014 it doesn't help when the problem is thousands of *different* keys all expiring together, since each key still needs its own DB query.",
@@ -2067,10 +2067,10 @@
     "mode": "scenario",
     "prompt": "An attacker (or a buggy client) hammers `/users/{id}` with random, mostly nonexistent user IDs. Each lookup misses the cache, hits the database to confirm the user doesn't exist, and nothing gets cached since there's no user object to store. Database load climbs steadily. What's the standard mitigation?",
     "options": [
-      "Rate-limit the endpoint per client IP",
-      "Lengthen the TTL on positive (found) cache entries",
-      "Add an index on the user ID column to speed up the database lookup",
-      "Cache the negative result too (a short-TTL sentinel like 'not found' for that key), so repeated lookups for the same nonexistent ID are served from cache; optionally add a Bloom filter to cheaply reject IDs known not to exist before touching the cache at all"
+      "Rate-limit the endpoint per client IP, since lookups of nonexistent IDs like these always come from a single source",
+      "Lengthen the TTL on positive (found) cache entries so more lookups are served from the cache and fewer ever reach the database",
+      "Add an index on the user ID column so each database lookup is fast enough that the extra queries stop adding meaningful load",
+      "Cache the negative result too (a short-TTL 'not found' entry) so repeat lookups skip the DB; a Bloom filter can reject unknown IDs even earlier"
     ],
     "correctIndex": 3,
     "explanation": "Negative caching stops repeated lookups for the same nonexistent key from ever reaching the DB again, and a Bloom filter can reject clearly-nonexistent IDs even earlier. Indexing makes each individual DB query cheaper but does nothing about the sheer volume of repeated queries hitting the DB. Rate-limiting by IP helps against a single attacker but not against broadly distributed traffic hitting many distinct nonexistent keys, and it's a perimeter defense rather than a caching fix. Lengthening positive-entry TTLs is irrelevant here \u2014 the requests are for IDs that were never found, so there are no positive entries involved at all.",
@@ -2087,10 +2087,10 @@
     "mode": "scenario",
     "prompt": "A single Redis key holding a celebrity's profile data gets 200x more read traffic than any other key during a viral event. The one shard hosting that key sits at 100% CPU while every other shard is idle. Adding more shards to the cluster doesn't help, because consistent hashing keeps routing that one key to the same node. What's the standard fix for this hot-key problem?",
     "options": [
-      "Add more shards to the Redis Cluster",
-      "Increase the TTL on that specific key so it's evicted less often",
-      "Switch that key's value from a string to a hash data structure",
-      "Shard/replicate the hot key itself \u2014 store several copies (e.g. `profile:123:0`..`profile:123:9`, or local in-process copies on each app server) and have readers spread across the replicas \u2014 so read load for that one logical key is distributed across multiple nodes/processes"
+      "Add more shards to the Redis Cluster, so each shard owns fewer keys and the hot key's node has more headroom",
+      "Increase the TTL on that specific key so it's evicted less often and far fewer requests have to go back and fetch it again",
+      "Switch that key's value from a string to a hash data structure, so each field can be read separately and its load spread across the whole cluster",
+      "Replicate the hot key itself: store several copies (e.g. `profile:123:0`..`profile:123:9`, or local in-process copies) and spread reads across them"
     ],
     "correctIndex": 3,
     "explanation": "Replicating a hot key across multiple physical keys/nodes is the standard way to spread reads for one logical key across multiple machines. Longer TTL addresses eviction/miss frequency, but the described problem is CPU load from cache *hits* concentrated on one node, not misses. Adding shards doesn't help because the stem already establishes that consistent hashing always routes that key to the same node regardless of cluster size. Changing the data structure changes how the value is stored on that one node, it doesn't change which node owns the key or spread its traffic across the cluster.",
@@ -2107,9 +2107,9 @@
     "mode": "scenario",
     "prompt": "During a flash sale, one specific `inventory-count` cache key expires at exactly 2:00:00pm, and in that same instant 500 requests miss it and all recompute the count from the database concurrently. An on-call engineer reviewing the incident calls this 'cache penetration' and proposes adding a Bloom filter. Is that the right diagnosis and fix?",
     "options": [
-      "Yes \u2014 any burst of concurrent database load caused by cache misses counts as cache penetration by definition",
-      "No \u2014 this is a cache stampede (dogpile) on a single hot key, not cache penetration; penetration is about lookups for keys that don't exist at all, but this key does exist and simply expired. The right fix is request coalescing/locking around that key's recompute, not a Bloom filter",
-      "Yes, and the Bloom filter recommendation is also correct, since Bloom filters generally reduce database load in any cache-miss scenario"
+      "Yes \u2014 any burst of concurrent database load caused by cache misses counts as cache penetration by definition, whether or not the keys being looked up actually exist",
+      "No \u2014 it's a cache stampede on one existing key; penetration means lookups for keys that don't exist. Fix it with coalescing/locking, not a Bloom filter",
+      "Yes, and the Bloom filter is also the right fix, since Bloom filters reduce database load in any cache-miss scenario, including expired keys"
     ],
     "correctIndex": 1,
     "explanation": "The scenario is a textbook stampede: many concurrent misses on one existing, expired key \u2014 the fix is coalescing/locking, not a Bloom filter. Calling any cache-miss-driven load spike 'penetration' collapses two distinct, well-defined failure modes into one, and the fix chosen for penetration wouldn't actually solve this stampede. A Bloom filter only helps distinguish 'definitely absent' from 'maybe present' for keys that might not exist in the store at all; for a key that legitimately exists and just expired, the filter would report 'maybe present' and every request would still proceed to the database, doing nothing to prevent the concurrent recompute.",
@@ -2125,10 +2125,10 @@
     "mode": "scenario",
     "prompt": "A team implements stampede protection with a per-key Redis lock: the first request to miss the cache calls `SETNX lock:key`, recomputes the value, writes it to cache, then deletes the lock. During a deploy, the pod holding the lock is killed mid-recompute, before it deletes the lock key. Now every subsequent request for that key blocks forever waiting on a lock that will never be released. What's missing from this design?",
     "options": [
-      "Requests should retry acquiring the lock with exponential backoff instead of blocking",
-      "The lock should be acquired with an expiration (e.g. `SET lock:key val NX EX 5`), so if the holder crashes, the lock auto-expires after a bounded time and another request can acquire it and recompute",
-      "Use an optimistic (compare-and-swap) locking scheme instead of a pessimistic one",
-      "The recompute logic should be wrapped in a database transaction"
+      "Waiting requests should retry acquiring the lock with exponential backoff instead of blocking, so they eventually get it once the holder recovers",
+      "Acquire the lock with an expiry (e.g. `SET lock:key val NX EX 5`), so a crashed holder's lock expires on its own and another request can take over",
+      "Use an optimistic (compare-and-swap) locking scheme instead of a pessimistic one, so no request ever has to wait on a lock at all",
+      "Wrap the recompute logic in a database transaction, so a crash mid-recompute rolls everything back, including the lock"
     ],
     "correctIndex": 1,
     "explanation": "A lock with a TTL bounds how long a crash can leave other requests stuck, which is exactly the failure described. A DB transaction protects consistency of the database write, it says nothing about releasing an orphaned lock that lives in the cache layer. Backoff-with-retry changes how waiters poll for the lock, but if the lock itself never expires, no amount of retrying will ever succeed. Optimistic/CAS locking solves concurrent-write conflicts on a value, but still needs some mechanism (a TTL or fencing token) to detect and clear a lock left behind by a crashed holder \u2014 swapping lock styles alone doesn't solve the orphaned-lock problem.",
@@ -2144,10 +2144,10 @@
     "mode": "scenario",
     "prompt": "After adding negative caching to fix penetration on `/users/{id}`, a new bug appears: when a user signs up, their profile is unreachable for up to 5 minutes even though the DB write succeeded instantly, because an earlier lookup (before signup) cached a 'not found' result for that ID with a 5-minute TTL. What's the best fix that keeps the penetration protection intact?",
     "options": [
-      "Increase the negative cache TTL further so fewer signups fall into this timing window",
-      "Give negative cache entries a much shorter TTL than positive entries, and/or explicitly invalidate the negative entry for a key at write time, so a fresh write becomes visible quickly instead of waiting out a long negative TTL",
-      "Add a Bloom filter in front of the negative cache",
-      "Remove negative caching entirely and go back to always querying the database on a miss"
+      "Increase the negative cache TTL further, so fewer signups fall into the timing window between a lookup and the account being created",
+      "Give negative entries a much shorter TTL than positive ones, and/or delete the negative entry for a key when it's written, so new records show up quickly",
+      "Store the 'not found' IDs in a Bloom filter instead of the cache, and remove the user's ID from it at signup so they become reachable immediately",
+      "Remove negative caching entirely and go back to always querying the database on a miss, since correctness matters more than load"
     ],
     "correctIndex": 1,
     "explanation": "Shortening the negative TTL and/or invalidating on write keeps repeated nonexistent-key lookups cheap while making genuinely new records visible quickly. Removing negative caching entirely 'fixes' the staleness bug by reintroducing the exact penetration problem it was added to solve. Increasing the negative TTL further makes the average staleness worse, not better, since it widens the window in which a stale 'not found' can outlive a real signup. A Bloom filter only ever answers 'definitely absent' or 'maybe present' from a fixed/rebuilt dataset; standard Bloom filters can't have individual entries invalidated on a single write, so they don't address this freshness bug.",
@@ -2163,10 +2163,10 @@
     "mode": "scenario",
     "prompt": "You want stampede protection for a very high-QPS key, but you're wary of adding a distributed lock \u2014 it's a new point of contention and, as in the lock-crash scenario, its own failure mode. What's a well-known lock-free alternative that still prevents a stampede at expiry?",
     "options": [
-      "Cache the value in multiple layers (e.g. CDN plus app-level cache) so a miss on one layer falls through to another",
-      "Lower that key's TTL so misses happen more often but each miss is 'cheaper'",
-      "Disable the TTL on that key entirely and never expire it",
-      "Probabilistic early recomputation (e.g. the 'xfetch' algorithm): as an entry approaches expiry, each read has a small, increasing chance of triggering an early recompute by that one request, so the cache refreshes slightly before it actually expires, and only occasionally, instead of every request stampeding at the exact expiry instant"
+      "Cache the value in multiple layers (e.g. a CDN plus an app-level cache), so a miss on one layer falls through to the next instead of ever reaching the origin database",
+      "Lower that key's TTL so misses happen more often but each one is cheaper, keeping every individual recompute small",
+      "Disable the TTL on that key entirely and never expire it, since a high-QPS key is read too often to ever go stale",
+      "Probabilistic early recomputation (e.g. 'xfetch'): near expiry, each read has a small, rising chance of refreshing the value early, so one request renews it first"
     ],
     "correctIndex": 3,
     "explanation": "Probabilistic early expiration spreads recomputation across time and across only a small fraction of requests, without needing a lock. Disabling the TTL removes the stampede trigger but also removes time-based freshness, so it isn't a general answer for keys that need to expire. Lowering the TTL just makes stampedes happen more frequently and smaller \u2014 it doesn't eliminate the fundamental concurrent-miss-on-expiry problem. Layering caches shifts where a miss eventually lands, but concurrent requests still cascade down and hit the origin together once they all miss the lowest layer \u2014 layering doesn't coalesce simultaneous requests for the same key.",
@@ -2182,10 +2182,10 @@
     "mode": "scenario",
     "prompt": "A team deploys a brand-new, empty cache cluster in front of their primary database for a service handling a steady 50k req/s. The moment it goes live and takes production traffic, nearly every request is a miss at once, and the database sees a spike close to the full 50k req/s \u2014 as if there were no cache at all. What's the standard mitigation for this rollout scenario, beyond general jitter/coalescing?",
     "options": [
-      "Pre-warm the cache before cutover \u2014 proactively populate the most frequently accessed keys from the DB (or replay recent read traffic) ahead of time, and/or ramp traffic to the new cluster gradually rather than switching 100% instantly",
-      "Add per-key request coalescing/locking on the new cluster",
-      "Increase the new cache cluster's memory allocation",
-      "Add jittered TTLs to the new cache's entries"
+      "Pre-warm the cache before cutover (load the hottest keys or replay recent reads), and/or shift traffic to the new cluster gradually",
+      "Add per-key request coalescing/locking on the new cluster, so each missed key triggers only one database query at a time",
+      "Increase the new cache cluster's memory allocation, so it can hold the full working set from the moment it goes live",
+      "Add jittered TTLs to the new cache's entries, so the initial wave of misses is spread out over time instead of arriving all at once"
     ],
     "correctIndex": 0,
     "explanation": "Pre-warming and a gradual traffic ramp directly address an empty cache's initial population, which is the actual cause of the spike. Jittered TTLs desynchronize *future* expirations relative to each other, but there's no existing expiry pattern to jitter on a cache that has never been populated at all. Coalescing bounds duplicate work per key to one recompute, but with ~50k req/s spread across effectively all distinct keys at once (not one hot key), you still get one concurrent DB query per distinct key simultaneously \u2014 a large multiple of normal load. More memory only affects how much the cache can hold once populated; it doesn't change that the cluster starts empty, so the spike happens regardless of eventual capacity.",
@@ -2201,10 +2201,10 @@
     "mode": "scenario",
     "prompt": "For a stampede-prone key, instead of making waiting requests block until the first request finishes recomputing (the coalescing/locking approach), a team wants every request to get an instant response even during the recompute window. What's the standard pattern for this, and what's its tradeoff versus blocking coalescing?",
     "options": [
-      "Cache the value with no expiration and invalidate manually on writes",
-      "Stale-while-revalidate: serve the old (expired) value immediately to all requests while exactly one background request recomputes and refreshes the cache, trading strict freshness (clients may briefly see slightly stale data during the revalidation window) for lower latency",
+      "Cache the value with no expiration and invalidate it manually on writes, so there's never a recompute window to wait through",
+      "Stale-while-revalidate: serve the expired value instantly to everyone while one background request refreshes it, trading brief staleness for low latency",
       "Use a distributed lock \u2014 it's functionally identical to stale-while-revalidate, since whichever response, blocking or stale, comes back first is served",
-      "Add more app servers so more requests can be handled during the recompute window"
+      "Add more app servers so more requests can be served in parallel during the recompute window, keeping responses instant"
     ],
     "correctIndex": 1,
     "explanation": "Stale-while-revalidate is the standard pattern for keeping latency low by serving a stale value during a bounded, single-request recompute window. Adding app servers increases capacity to handle concurrent requests, but doesn't change whether each request waits on the slow recompute or gets an instant response \u2014 it's a capacity fix, not a latency/freshness tradeoff. Removing expiration and invalidating manually avoids the recompute-on-expiry trigger altogether rather than handling it gracefully, and it doesn't work for values that change outside a known write path (e.g. time-based aggregates), which is exactly the class of key stale-while-revalidate targets. Blocking locks and stale-while-revalidate are not functionally identical: locking keeps every response consistent/fresh at the cost of waiter latency, while stale-while-revalidate keeps latency low at the cost of knowingly serving stale data during revalidation \u2014 they optimize for opposite priorities.",

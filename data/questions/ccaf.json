@@ -61,10 +61,10 @@
     "mode": "scenario",
     "prompt": "A document-processing agent's loop checks whether the latest response contains a text block to decide the task is finished. It works for single-step tasks, but on multi-step tasks it sometimes stops after step one, even though Claude included a sentence alongside a tool call requesting the next step. What's the most reliable fix?",
     "options": [
-      "Tell Claude never to include text alongside tool calls",
-      "Check `stop_reason` instead — \"tool_use\" means continue, \"end_turn\" means finished",
-      "Strip text content from responses so only tool calls remain",
-      "Raise the maximum number of loop iterations allowed"
+      "Tell Claude in the system prompt never to include text alongside tool calls, so a text block always means the task is done",
+      "Check `stop_reason` instead, since \"tool_use\" means continue and \"end_turn\" means the task is finished",
+      "Strip text content from responses before the check, so only tool calls remain and text can't trigger an early exit",
+      "Raise the maximum number of loop iterations allowed, so multi-step tasks have room to finish"
     ],
     "correctIndex": 1,
     "explanation": "Claude can return text and a tool_use block together, so checking for text presence is unreliable — `stop_reason` is deterministic. Stripping text removes useful context without fixing the detection logic. Instructing Claude to never include text is a probabilistic prompt fix, not a guarantee. Raising the iteration cap doesn't help since the loop isn't running out of iterations, it's exiting early on a false signal.",
@@ -80,10 +80,10 @@
     "mode": "scenario",
     "prompt": "An engineer notices their coding agent occasionally loops far longer than expected. As a fix, they hard-cap the loop at 8 iterations. Simple tasks now finish fine, but some genuinely complex refactors get cut off mid-way. What's the better approach?",
     "options": [
-      "Swap the iteration cap for a wall-clock timeout instead",
+      "Swap the iteration cap for a wall-clock timeout, so complex tasks get as much time as they need while runaway loops still stop",
       "Rely on `stop_reason` as the primary signal, keeping a much higher cap only as a safety net",
-      "Keep the hard cap but raise it to 30",
-      "Remove the cap entirely"
+      "Keep the hard cap but raise it to 30 iterations, which is enough headroom for even the largest refactors",
+      "Remove the cap entirely and let every task run until the model decides it's finished"
     ],
     "correctIndex": 1,
     "explanation": "An iteration cap used as the primary stopping mechanism is always wrong for some task — too low cuts off real work, too high wastes time on runaway loops. `stop_reason` should drive normal termination, with a cap only as a distant safety net. Just raising the number shifts the problem rather than fixing it. Removing the cap loses protection against a genuinely runaway loop. A wall-clock timeout has the same underlying flaw — it's still an arbitrary proxy standing in for the model's actual completion signal.",
@@ -155,9 +155,9 @@
     "mode": "scenario",
     "prompt": "A coordinator invokes the same web-search subagent twice in one workflow — once for 'authentication vulnerabilities' and once for 'authorization vulnerabilities' — and the second call ends up duplicating part of the first search, unaware there was any overlap. What's the best fix?",
     "options": [
-      "Give the subagent access to a shared memory store so it can check its own prior calls",
-      "This is expected behavior and needs no fix",
-      "Combine both topics into a single subagent call every time, regardless of scope",
+      "Give the subagent access to a shared memory store so it can check what its own earlier calls already searched",
+      "Nothing — this is expected behavior, and the overlapping results are simply merged and deduplicated later",
+      "Combine both topics into a single subagent call every time, regardless of how distinct their scopes are",
       "The coordinator should include the scope and relevant findings of the first call in the second call's prompt"
     ],
     "correctIndex": 3,
@@ -174,10 +174,10 @@
     "mode": "scenario",
     "prompt": "A coordinator routes every incoming query — no matter how trivial — through the full pipeline: web search, document analysis, and synthesis. A simple factual question like 'what year was the company founded' now takes three agent calls and noticeable latency. What should change?",
     "options": [
-      "Skip synthesis specifically for any query under 10 words",
-      "Nothing — always running the full pipeline maximizes thoroughness",
-      "Merge all three subagents into a single generalist agent",
-      "The coordinator should dynamically select which subagents a given query actually needs"
+      "Skip the synthesis step specifically for any query under 10 words, since short questions rarely need anything beyond a search",
+      "Nothing — always running the full pipeline maximizes thoroughness, which matters more than latency",
+      "Merge all three subagents into a single generalist agent so every query needs only one call",
+      "The coordinator should dynamically select which subagents each query actually needs, based on its complexity"
     ],
     "correctIndex": 3,
     "explanation": "Dynamic subagent selection is one of the coordinator's core responsibilities — analyzing query complexity and only invoking what's needed. Always running the full pipeline directly contradicts that responsibility: it adds two unnecessary agent calls and real latency to a query a single web search could answer. Merging subagents loses the benefit of specialization. Skipping synthesis based on word count is an arbitrary proxy, not an assessment of actual query complexity.",
@@ -231,10 +231,10 @@
     "mode": "quick-fire",
     "prompt": "What is `fork_session` used for?",
     "options": [
-      "Blocking a tool call before it executes",
-      "Continuing the exact same line of investigation from where it left off",
+      "Blocking a specific tool call before it executes, as part of a session's safety checks",
+      "Continuing the exact same line of investigation from exactly where the previous session left off",
       "Creating independent branches from a shared analysis baseline for divergent exploration",
-      "Normalizing tool output into a consistent format"
+      "Normalizing tool output into a consistent format before the session stores it"
     ],
     "correctIndex": 2,
     "explanation": "fork_session branches off from a shared starting point so different approaches can be explored independently — each fork can't see the others' results. Continuing the same investigation is what `--resume` does instead of forking. \"Normalizing tool output into a consistent format\" and \"blocking a tool call before it executes\" both describe tool-execution-hook mechanisms entirely separate from session management — neither has anything to do with branching or continuing a session, so neither describes what fork_session does.",
@@ -345,10 +345,10 @@
     "mode": "scenario",
     "prompt": "A customer submits one message bundling three separate issues: a return, a shipping address update, and a loyalty points question. What's the correct way for the agent to handle this?",
     "options": [
-      "Handle each issue as its own separate conversation, one fully completed before starting the next",
+      "Handle each issue as its own separate conversation, fully completing one before starting the next",
       "Decompose into the three items, investigate each in parallel using shared context, then synthesize one unified response",
-      "Escalate the entire request to a human immediately, since it has multiple parts",
-      "Address only the first issue mentioned and let the customer follow up separately for the rest"
+      "Escalate the entire request to a human immediately, since multi-part requests fall outside what an agent should be trusted to handle on its own",
+      "Address only the first issue mentioned, and let the customer follow up separately about the others"
     ],
     "correctIndex": 1,
     "explanation": "Multi-concern requests should be decomposed, investigated in parallel (since shared account context applies to all three), and resolved with one unified response. Addressing only the first issue drops the others entirely. Fully sequential handling wastes the shared context and adds unnecessary friction. Escalating automatically ignores that agents are expected to handle straightforward multi-part requests themselves.",
@@ -364,10 +364,10 @@
     "mode": "scenario",
     "prompt": "A support agent's identity-verification-before-refund policy is enforced purely through system prompt wording and measurably fails in roughly 1 out of every 12 cases. The proposed fix is adding three few-shot examples demonstrating the correct order. Will this fully close the compliance gap?",
     "options": [
-      "Yes, few-shot examples make the model's behavior fully deterministic",
-      "Yes, as long as the examples are detailed and specific enough",
-      "No, the refund tool should just be removed from the agent entirely",
-      "No — few-shot examples improve accuracy but stay probabilistic, so a programmatic gate is still needed for guaranteed enforcement"
+      "Yes — few-shot examples make the model's behavior fully deterministic once it has seen the correct order a few times",
+      "Yes, as long as the examples are detailed and specific enough to cover each type of refund request",
+      "No — the refund tool should be removed from the agent entirely and refunds handled by staff instead",
+      "No — few-shot examples improve accuracy but stay probabilistic; guaranteed enforcement needs a programmatic gate"
     ],
     "correctIndex": 3,
     "explanation": "Few-shot examples can meaningfully raise accuracy but never eliminate the failure rate — the model remains probabilistic no matter how detailed or specific the examples are, so even \"detailed enough\" examples leave a non-zero failure rate. The claim that few-shot examples make behavior \"fully deterministic\" is flatly false — nothing about adding examples to a prompt changes the model's fundamentally probabilistic nature. For a compliance requirement that must hold 100% of the time, only a programmatic prerequisite gate provides that guarantee. Removing the tool entirely isn't a proportionate response to a fixable workflow ordering problem.",
@@ -421,10 +421,10 @@
     "mode": "scenario",
     "prompt": "An agent occasionally executes international fund transfers before the required AML check completes, roughly 1 in 20 times, despite clear prompt instructions to check first. The team proposes a PostToolUse hook that flags any transfer completed without a prior AML pass for later manual review. Does this satisfy a 100% compliance requirement?",
     "options": [
-      "Yes, as long as the review happens within 24 hours",
-      "No — by the time a PostToolUse hook fires, the non-compliant transfer has already executed; a PreToolUse hook blocking the call is what's needed",
-      "No, but a PostToolUse hook that automatically reverses the transfer once flagged would be sufficient",
-      "Yes, flagging after the fact is functionally equivalent to preventing it"
+      "Yes, as long as the flagged transfers are reviewed within 24 hours, before the funds are fully settled",
+      "No — a PostToolUse hook fires after the transfer has already run; a PreToolUse hook that blocks the call is what's needed",
+      "No, but a PostToolUse hook that automatically reverses the transfer as soon as it's flagged would be enough, since the reversal undoes the violation within seconds",
+      "Yes — flagging every non-compliant transfer after the fact is functionally equivalent to preventing it"
     ],
     "correctIndex": 1,
     "explanation": "A PostToolUse hook only observes after the fact — the transfer has already happened by the time it fires, which doesn't satisfy a requirement that no transfer skip AML checks. A PreToolUse hook blocking `transfer_funds` until the AML check passes is the only way to guarantee the transfer never executes non-compliantly. A bounded review window doesn't change the fact that the transfer already executed non-compliantly before anyone looked at it — timeliness of the review is irrelevant to whether the original execution was compliant. Flagging isn't equivalent to preventing — detecting a violation after it happened is a different thing from never letting it happen. Even automatically reversing the transfer afterward doesn't change that a non-compliant transfer executed at least momentarily — a true 100% requirement means the transfer never executes non-compliantly in the first place, not that it gets undone afterward.",
@@ -478,10 +478,10 @@
     "mode": "quick-fire",
     "prompt": "Which pattern best fits exploring an unfamiliar legacy codebase where the scope of issues isn't known upfront?",
     "options": [
-      "PostToolUse normalization",
-      "A single-pass review",
-      "Fixed sequential pipeline",
-      "Dynamic adaptive decomposition"
+      "PostToolUse normalization of tool output",
+      "A single-pass review of the whole codebase",
+      "A fixed sequential pipeline of review steps",
+      "Dynamic adaptive decomposition into subtasks"
     ],
     "correctIndex": 3,
     "explanation": "Dynamic adaptive decomposition generates and adjusts subtasks as the agent learns more, which suits open-ended investigation where the full scope isn't known at the start. A single-pass review is exactly the setup that causes attention dilution on a task this open-ended — it's a processing choice, not a decomposition pattern, and doesn't address the unknown scope. A fixed sequential pipeline can't adapt to unexpected findings — the wrong fit when dependencies and issues emerge mid-investigation, which is the norm in legacy code. PostToolUse normalization is an unrelated hook mechanism for cleaning up tool output formats, not a decomposition pattern.",
@@ -497,10 +497,10 @@
     "mode": "quick-fire",
     "prompt": "What is the 'attention dilution' problem in agentic task processing?",
     "options": [
-      "Tool results silently overwriting each other in memory",
-      "Processing too many items in a single pass, causing inconsistent depth of analysis across items",
-      "The model forgetting its system prompt over a long conversation",
-      "The model running out of context window space entirely"
+      "Tool results silently overwriting each other in the agent's working memory",
+      "Processing too many items in one pass, so analysis depth becomes inconsistent across them",
+      "The model gradually forgetting its system prompt over a long conversation",
+      "The model running out of context window space entirely partway through a long task and dropping the earliest items"
     ],
     "correctIndex": 1,
     "explanation": "Attention dilution happens when an agent handles too many items at once — early items get disproportionate attention while later ones get skimmed, producing inconsistent depth. Tool results silently overwriting each other in memory isn't a documented failure mode here and doesn't match the symptom (inconsistent depth across items, not lost or corrupted data). The model forgetting its system prompt describes an unrelated failure mode (instruction drift over a long conversation), not degrading analysis depth across a batch of items. Running out of context window space would cause an outright failure or truncation, not the gradual, inconsistent shallowing attention dilution produces.",
@@ -516,10 +516,10 @@
     "mode": "scenario",
     "prompt": "A single review pass across 20 files gives thorough, detailed feedback on the first several files, then progressively shallower feedback on the rest — and even approves a pattern in one file that it had flagged as a bug in an earlier file. The team's first instinct is to switch to a model with a much larger context window. Will that fix it?",
     "options": [
-      "No — this is a structural attention-allocation problem, best solved with per-item passes plus a cross-item integration pass, not more context capacity",
-      "Yes, but only if paired with a stronger prompt",
-      "Yes, since the issue is the model running out of room to hold all 20 files at once",
-      "No, the fix is to permanently cap all future reviews at 5 files"
+      "No — it's a structural attention-allocation problem, fixed with per-file passes plus a cross-file integration pass, not more context",
+      "Yes, but only if it's paired with a stronger prompt telling the model to review every file equally",
+      "Yes, since the issue is the model running out of room to hold all 20 files at once, which a much larger context window directly solves",
+      "No — the fix is to permanently cap all future reviews at 5 files, the size at which feedback stayed thorough"
     ],
     "correctIndex": 0,
     "explanation": "Attention dilution is architectural, not a capacity limit — a bigger context window doesn't guarantee even attention across all 20 files, it just means they all technically fit. The proven fix is multi-pass architecture: individual per-file passes for consistent depth, plus a separate cross-file pass for issues spanning files. Permanently capping file count sacrifices real work rather than fixing the structural issue, and a stronger prompt alone doesn't solve an attention-allocation problem either.",
@@ -536,9 +536,9 @@
     "prompt": "A team batches their 40-file codebase review into 4 batches of 10 files, giving each batch its own dedicated review pass. Feedback within each batch is now consistently detailed. However, a naming convention inconsistency spanning files in batch 1 and batch 3 is never caught. What's missing?",
     "options": [
       "A dedicated cross-item integration pass that specifically checks for issues spanning across all files or batches",
-      "More files should be included per batch",
-      "A larger underlying model",
-      "Nothing — batching alone fully solves attention dilution"
+      "More files should be included per batch, so related files are more likely to land together in the same review pass and get compared",
+      "A larger underlying model that can keep the earlier batches in mind while reviewing later ones",
+      "Nothing — batching alone fully solves attention dilution, so the miss must be a one-off"
     ],
     "correctIndex": 0,
     "explanation": "Batching reduces attention dilution within each batch, but without a separate cross-item integration pass, issues that span across batches — like inconsistent naming conventions — go undetected, since no single pass ever looks at all the files together. Adding more files per batch would reintroduce the original dilution problem; a bigger model doesn't add a cross-batch view either.",
@@ -592,10 +592,10 @@
     "mode": "quick-fire",
     "prompt": "Only 3 of 50 files in a codebase changed since the last session. What does 'targeted re-analysis' mean in this context?",
     "options": [
-      "Re-analyze only the 3 changed files, relying on the injected summary for everything else",
-      "Fork the session once per changed file",
-      "Skip re-analysis entirely and trust the previous results",
-      "Re-analyze all 50 files from scratch to be safe"
+      "Re-analyze only the 3 changed files, since the injected summary already covers everything else",
+      "Fork the session once per changed file, so each change is analyzed in its own clean branch",
+      "Skip re-analysis entirely and trust the previous results, since 47 of the 50 files are unchanged",
+      "Re-analyze all 50 files from scratch, since changes in 3 files could affect any of the others"
     ],
     "correctIndex": 0,
     "explanation": "Targeted re-analysis means informing the agent about specifically which files changed and having it re-analyze only those, while the injected summary covers everything unchanged. Forking once per changed file misapplies fork_session — that mechanism is for exploring divergent approaches to the same problem, not for scoping which files to re-read; it would just create disconnected branches, not a re-analysis of the changed files within one coherent session. Skipping re-analysis entirely ignores the actual changes that were made. Re-analyzing all 50 files from scratch is exactly the full re-exploration that targeted re-analysis exists to avoid.",
@@ -611,10 +611,10 @@
     "mode": "scenario",
     "prompt": "A developer resumes a coding session after fixing three bugs identified the day before. The agent's advice references code that was already fixed, and when asked directly about one file, gives an answer that contradicts itself within the same response. What's happening, and what's the best fix?",
     "options": [
-      "Nothing is wrong; just ask the agent to double-check its own answer",
-      "The resumed session still contains the old, pre-fix tool results in its history — start a fresh session with a summary of prior findings plus a note on which files changed",
-      "Resume again and simply tell the agent that the three files are already fixed",
-      "Use fork_session to branch off cleanly from the current stale session"
+      "Nothing is wrong with the session itself; just ask the agent to double-check its own answer against the current code before responding",
+      "The resumed session still holds old pre-fix tool results; start fresh with a summary of prior findings and a note on which files changed",
+      "Resume the session again and tell the agent the three files have already been fixed, which overrides the old results it's still holding in its history",
+      "Use fork_session to branch off cleanly from the current session, so the new branch starts without the stale pre-fix tool results"
     ],
     "correctIndex": 1,
     "explanation": "This is the stale context problem: --resume restored old tool results from before the fixes, and the model is reasoning from both the stale and current data at once, producing contradictions. A fresh session with an injected summary and a note on the 3 changed files clears the stale results while preserving prior knowledge. Simply resuming again and telling the agent the files are fixed is the documented naive fix — it helps, but the old stale tool results are still sitting in the conversation history and can still influence reasoning on tangential points. fork_session would just inherit the same stale data rather than fixing it, since a fork carries over whatever's already in the session it branches from. Asking the agent to self-correct doesn't remove the stale tool results still sitting in its context — it has no way to know which of its own claims came from stale vs. fresh data.",
@@ -630,10 +630,10 @@
     "mode": "scenario",
     "prompt": "A long-running session has accumulated dozens of largely irrelevant tool calls over several hours, and the agent's responses have started referencing outdated or tangential details. No files have changed. What's the best move?",
     "options": [
-      "Keep using --resume indefinitely, since no files have changed and the history still seems relevant",
-      "fork_session, to branch away from the clutter into a cleaner-feeling copy",
-      "Delete the session and start with zero context, discarding all prior findings that took time to build",
-      "Fresh start with a curated summary injection, since degraded/cluttered context benefits from a clean baseline even without file changes"
+      "Keep using --resume indefinitely, since no files have changed, so the full history is still accurate and relevant",
+      "fork_session, to branch away from the accumulated clutter into a cleaner copy of the session that still keeps all the useful findings",
+      "Delete the session and start again with zero context, so none of the old tool calls can influence the agent",
+      "A fresh start with a curated summary injection, since cluttered context benefits from a clean baseline even when no files changed"
     ],
     "correctIndex": 3,
     "explanation": "Fresh start with summary injection isn't only for stale file changes — it also applies when a long session's context has degraded from accumulated clutter. A curated summary preserves the useful findings while dropping the irrelevant noise. --resume would keep dragging the clutter forward regardless of how relevant the history still feels. fork_session still branches from the same cluttered history rather than cleaning it — branching doesn't remove clutter, it just copies it. Discarding everything and starting from zero throws away genuinely useful prior findings unnecessarily.",
@@ -668,10 +668,10 @@
     "mode": "quick-fire",
     "prompt": "Two tools — get_customer (\"Retrieves customer information\") and lookup_order (\"Retrieves order details\") — keep getting confused for each other. What's the most effective first fix?",
     "options": [
-      "Consolidate the two tools into one",
-      "Build a routing classifier to pre-select the correct tool",
+      "Consolidate the two tools into a single tool so there's nothing left to confuse",
+      "Build a routing classifier that pre-selects the correct tool before the model sees the request",
       "Expand both descriptions with inputs, example queries, edge cases, and explicit boundaries",
-      "Add few-shot examples to the system prompt"
+      "Add few-shot examples to the system prompt showing which tool fits each kind of question"
     ],
     "correctIndex": 2,
     "explanation": "Expanding minimal descriptions is the low-effort, high-leverage fix that addresses the actual root cause — vague descriptions. Few-shot examples add token overhead without fixing the underlying ambiguity. A routing classifier is over-engineered as a first step and bypasses the model's natural language understanding. Consolidation is a valid longer-term option but requires more effort than simply improving the descriptions.",
@@ -688,8 +688,8 @@
     "prompt": "When should a broad, generic tool like `analyse_document` be split into multiple purpose-specific tools?",
     "options": [
       "Only when two engineers on the team openly disagree about what the tool's intended use actually is, and can't resolve it in code review",
-      "When its broad responsibility makes its purpose and contract ambiguous — e.g. splitting into extract_data_points, summarise_content, and verify_claim_against_source",
-      "Generic tools are usually preferable to purpose-specific ones, since splitting reduces the flexibility a broad tool provides"
+      "When its broad responsibility makes its purpose ambiguous, e.g. splitting it into extract_data_points, summarise_content and verify_claim_against_source",
+      "Generic tools are usually preferable to purpose-specific ones, since splitting reduces the flexibility a broad tool gives the model to adapt"
     ],
     "correctIndex": 1,
     "explanation": "Tool splitting is warranted when a generic tool's broad responsibility creates ambiguity about what it actually does — splitting into narrow, purpose-specific tools with defined input/output contracts resolves that. Engineers disagreeing about a tool's use, even if they can't resolve it in review, can be a symptom of that ambiguity, but disagreement itself isn't the criterion — the tool could be genuinely ambiguous with full team agreement, or genuinely fine despite an unresolved style disagreement. Preferring generic tools for their flexibility gets the tradeoff backwards: ambiguity is exactly the problem splitting solves, and a tool covering too much ground actively makes selection harder, not more flexible, regardless of how the preference is phrased.",
@@ -705,10 +705,10 @@
     "mode": "scenario",
     "prompt": "A system prompt includes the instruction 'always check customer details before proceeding.' After the team significantly improves the get_customer and lookup_order tool descriptions, the model still frequently calls get_customer for order-status questions. What's the most likely explanation?",
     "options": [
-      "Nothing more can be done at the description level — consolidate the two tools instead",
-      "The description improvements weren't detailed enough; add even more detail",
-      "The model has an underlying bug and needs a routing classifier layered in instead",
-      "The system prompt's keyword-sensitive instruction is creating an association that overrides the descriptions — the prompt itself needs review"
+      "Nothing more can be done at the description level, so the two tools should be consolidated into one instead",
+      "The description improvements weren't detailed enough; adding even more detail will eventually resolve the confusion",
+      "The model has an underlying routing bug, so a separate classifier should be layered in front of it to pick the right tool for each request",
+      "The system prompt's 'always check customer details' wording creates an association that overrides the descriptions, so the prompt needs review"
     ],
     "correctIndex": 3,
     "explanation": "System prompt wording can create unintended tool associations that override otherwise well-written descriptions — a phrase like 'always check customer details' can bias the model toward get_customer regardless of how clear the tool boundaries are. Simply adding more description detail won't fix an association rooted in the system prompt, since the descriptions were already 'significantly improved' in the scenario — the bottleneck has moved elsewhere. A routing classifier addresses the wrong layer of the problem entirely; it doesn't touch the system prompt text that's actually causing the bias. Consolidating the tools removes the distinction altogether, which is a much bigger change than necessary for what's really just a prompt-wording conflict.",
@@ -724,10 +724,10 @@
     "mode": "scenario",
     "prompt": "A tool named `analyse_content` is used for two very different purposes — summarizing internal documents and extracting structured data from web pages — and the model frequently applies web-extraction logic to internal documents. What's a low-effort fix that resolves the ambiguity without changing the underlying implementation?",
     "options": [
-      "Rename analyse_content to something like extract_web_results with a web-specific description, and add a separate tool for internal documents",
-      "Remove the tool entirely and require manual extraction",
-      "Add a confirmation step asking the user to specify content type every time",
-      "Rewrite the tool's internal implementation to auto-detect content type"
+      "Rename it to something like extract_web_results with a web-specific description, and add a separate tool for internal documents",
+      "Remove the tool entirely and have users extract the data they need manually, so the model can't misapply it",
+      "Add a confirmation step that asks the user to specify the content type every time the tool is called",
+      "Rewrite the tool's internal implementation so it auto-detects on its own whether it's been given a web page or an internal document"
     ],
     "correctIndex": 0,
     "explanation": "Renaming eliminates functional overlap at the interface level without touching the implementation — a name and description scoped to one purpose makes intent unambiguous. Rewriting the implementation to auto-detect type is a bigger, riskier change than necessary. A manual confirmation step adds friction rather than fixing the ambiguity at its source. Removing the tool loses functionality rather than clarifying it.",
@@ -743,10 +743,10 @@
     "mode": "quick-fire",
     "prompt": "What does setting `isError: true` in an MCP tool response communicate to the calling model?",
     "options": [
-      "The tool call was specifically rate-limited and should be retried after a short delay",
+      "The tool call was specifically rate-limited, and the model should wait a short delay before retrying the same request",
       "The tool requires human approval before continuing, similar to an approval-gated workflow step",
       "Execution failed, and the model should reason about recovery rather than treat the content as a normal successful result",
-      "The tool executed successfully but simply returned no data for this particular query"
+      "The tool executed successfully but simply returned no data for this particular query, so the model should report an empty result"
     ],
     "correctIndex": 2,
     "explanation": "isError: true is the MCP protocol's general mechanism for flagging failure, so the model reasons about recovery instead of treating error text as a valid answer. It isn't tied to approval workflows — nothing in the MCP error model ties isError to a human-approval gate; that would need to be enforced through some separate mechanism entirely, not communicated via this flag. It isn't rate-limit-specific either — a rate limit would just be one instance of the broader transient error category, not a distinct signal of its own. And it's the direct opposite of 'executed successfully but returned no data,' which is precisely the valid-empty-result case (isError: false) that isError: true is meant to be distinguished from.",
@@ -800,10 +800,10 @@
     "mode": "scenario",
     "prompt": "A tool queries a database for matching customer records and finds zero matches for a valid, well-formed query. The agent retries the same call three more times before giving up and escalating. What went wrong?",
     "options": [
-      "The tool should have set isError: true, and the retries were correct given that flag",
-      "The agent should have retried even more times before finally escalating to a human",
-      "The retries were unnecessary — a successful query with no matches is a valid empty result (isError: false), not a failure, so retrying doesn't change the outcome",
-      "The database itself is broken and urgently needs a full health check"
+      "The tool should have set isError: true for zero matches, in which case the agent's three retries would have been exactly the right response",
+      "The agent gave up too soon and should have retried several more times before finally escalating the query to a human",
+      "The retries were unnecessary: a successful query with no matches is a valid empty result (isError: false), and retrying can't change it",
+      "The database itself is likely broken and urgently needs a full health check before the agent queries it again"
     ],
     "correctIndex": 2,
     "explanation": "A valid empty result means the tool successfully queried and simply found nothing — isError should be false, and no amount of retrying changes 'no results found' into a different answer. Treating it as a failure and retrying wastes calls and delays the correct response, which is just reporting no matches. Nothing in the scenario indicates the database was unreachable or malfunctioning — assuming it's broken skips the far more mundane and more likely explanation (a valid query that legitimately matched nothing), and a health check is a disproportionate response to what's actually just a correctly-executed empty result.",
@@ -819,10 +819,10 @@
     "mode": "scenario",
     "prompt": "In a multi-agent pipeline, a document-analysis subagent hits a transient network timeout fetching one of ten source documents. It silently returns an empty result set with no indication anything failed, and the coordinator treats that as 'no relevant documents found.' What went wrong, and what should have happened instead?",
     "options": [
-      "The coordinator should retry the entire ten-document pipeline from scratch to be safe",
-      "Nothing wrong — an empty result set is a safe, conservative default to return here",
+      "The coordinator should rerun the entire ten-document pipeline from scratch, since a single empty result means the whole run's output can't be trusted",
+      "Nothing went wrong: an empty result set is a safe, conservative default for a subagent to return when a fetch fails",
       "The subagent should have terminated the entire multi-agent workflow immediately rather than continuing with partial data",
-      "The subagent silently suppressed a real error as a false success — it should have attempted local recovery, then propagated the error with partial results if unresolved"
+      "It hid a real error as a false success; it should have tried local recovery, then propagated the error with its partial results if that failed"
     ],
     "correctIndex": 3,
     "explanation": "Silently suppressing errors as empty successes is one of the two named anti-patterns here — it hides a real problem from the coordinator, which then makes a decision based on false information. The correct pattern is local recovery attempts for transient issues, and if that fails, propagating the actual error plus partial results and context. An empty result set is not automatically a safe default here — treating it as one is exactly the suppression anti-pattern the scenario describes, not a legitimate fallback. Retrying the entire ten-document pipeline from scratch is wasteful and doesn't fix the actual defect — the problem isn't that the pipeline failed, it's that the subagent's error response hid the failure inside what looked like a normal, if empty, result; restarting everything would just repeat the same silent suppression on the next run. Terminating the whole workflow over one document's timeout is the other named anti-pattern — overly drastic for a single, potentially recoverable failure.",
@@ -857,13 +857,13 @@
     "mode": "quick-fire",
     "prompt": "Which `tool_choice` mode forces the model to call one specific named tool, without the option to skip or reorder it?",
     "options": [
-      "There's no way to force a specific single tool",
+      "No mode does this — the model always makes the final choice of which tool to call",
       "Forced selection, e.g. {type: \"tool\", name: \"extract_metadata\"}",
-      "\"any\"",
-      "\"auto\""
+      "\"any\", which makes the model call a tool on every turn",
+      "\"auto\", combined with a system prompt that names the tool"
     ],
     "correctIndex": 1,
-    "explanation": "Forced selection with a specific tool name mandates that exact tool call, useful for enforcing a required first step the model can't skip. \"any\" forces some tool call but lets the model pick which one — it doesn't pin down a single specific tool. \"auto\" lets the model choose freely between text and any tool, offering no guarantee at all. The claim that there's no way to force a specific tool is simply false — forced selection exists precisely for this purpose; it's the third of the three tool_choice modes, not a missing capability.",
+    "explanation": "Forced selection with a specific tool name mandates that exact tool call, useful for enforcing a required first step the model can't skip. \"any\" forces some tool call but lets the model pick which one — it doesn't pin down a single specific tool. \"auto\" lets the model choose freely between text and any tool, offering no guarantee at all. The claim that there's no way to force a specific tool is simply false — forced selection exists precisely for this purpose; it's the `tool` mode of tool_choice, not a missing capability.",
     "references": [
       "Anthropic: Tool Use Documentation"
     ],
@@ -877,9 +877,9 @@
     "prompt": "When should `tool_choice` be set to \"any\" rather than left at the default \"auto\"?",
     "options": [
       "\"any\" is mainly a debugging setting and isn't meant to be relied on in production systems",
-      "When enforcing a single mandatory first step in a workflow that the model can't be allowed to skip",
-      "When you need guaranteed structured output from one of several tool schemas, but don't care which specific one gets used",
-      "When you want the model to freely decide between calling a tool or responding with text"
+      "When enforcing a single mandatory first step in a workflow, one specific tool the model must never be allowed to skip",
+      "When you need guaranteed structured output from one of several tool schemas, but don't mind which one is used",
+      "When you want the model to freely decide between calling one of the tools or replying with plain text"
     ],
     "correctIndex": 2,
     "explanation": "\"any\" is the right fit when you need the model to definitely call some tool — for example an extraction pipeline supporting multiple document types — without caring in advance which schema applies. \"auto\" is for general free-form decision-making, where returning plain text is a valid outcome. Enforcing one specific mandatory tool that the model can't skip calls for forced selection, not \"any\" — \"any\" still lets the model pick which tool, just not whether to call one. And \"any\" is not merely a debugging convenience — it's a normal, supported production setting for exactly the guaranteed-tool-call use case described here.",
@@ -895,10 +895,10 @@
     "mode": "scenario",
     "prompt": "A synthesis agent frequently needs to verify simple, single-source facts, but currently every verification — simple or complex — routes through the coordinator, adding 2-3 round trips and up to 40% latency. What's the recommended fix?",
     "options": [
-      "Give the synthesis agent full, unrestricted access to all verification tools",
-      "Increase the coordinator's overall processing speed and throughput to reduce round-trip latency",
-      "Remove verification from the synthesis agent's responsibilities entirely and hand it off elsewhere",
-      "Give the synthesis agent a scoped verify_fact tool for the simple single-source case, while complex multi-source verification still routes through the coordinator"
+      "Give the synthesis agent full, unrestricted access to all the verification tools, so that no verification of any kind ever has to go through the coordinator",
+      "Increase the coordinator's overall processing speed and throughput to reduce round-trip latency for every verification request",
+      "Remove verification from the synthesis agent's responsibilities entirely and hand it to a dedicated verification agent",
+      "Give the synthesis agent a scoped verify_fact tool for simple single-source checks; complex multi-source checks still go through the coordinator"
     ],
     "correctIndex": 3,
     "explanation": "Giving the synthesis agent a scoped verify_fact tool for the common simple case (roughly 85% of cases) removes unnecessary round trips, while complex multi-source verification (the remaining 15%) still routes through the coordinator where it belongs. Full unrestricted access violates least-privilege scoping. Removing verification entirely just relocates the bottleneck rather than solving it, and optimizing coordinator speed doesn't remove the structural round-trip overhead.",
@@ -914,10 +914,10 @@
     "mode": "scenario",
     "prompt": "A web-search subagent is given the generic `fetch_url` tool, which can retrieve content from any URL on the internet, when its actual job only ever requires fetching and validating document URLs. What's the recommended change, and why?",
     "options": [
-      "Keep fetch_url as-is, since generic tools offer more flexibility for unexpected cases",
-      "Replace fetch_url with a constrained load_document tool that validates document URLs only, applying the principle of least privilege",
-      "Give the subagent additional tools rather than replacing fetch_url",
-      "Add more logging around fetch_url calls instead of changing the tool"
+      "Keep fetch_url as it is, since a generic tool gives the subagent flexibility to handle any unexpected case that comes up",
+      "Replace fetch_url with a constrained load_document tool that only fetches and validates document URLs, applying least privilege",
+      "Give the subagent additional, more specific tools alongside fetch_url rather than replacing it, so its existing capabilities stay available",
+      "Add more logging around fetch_url calls so any misuse can be spotted, instead of changing the tool"
     ],
     "correctIndex": 1,
     "explanation": "Replacing an overly broad tool with a constrained, purpose-fit alternative applies least privilege — the subagent gets exactly the capability it needs, no more. Keeping the generic tool 'for flexibility' actually invites misuse outside the agent's specialization. Adding logging observes the problem without fixing the scope, and adding more tools doesn't address the over-broad existing one.",
@@ -971,13 +971,13 @@
     "mode": "quick-fire",
     "prompt": "What's the main benefit MCP resources provide that tools alone don't?",
     "options": [
-      "They expose content catalogues (like schemas or documentation hierarchies) up front, avoiding exploratory tool calls just to discover what's available",
-      "They let agents modify data directly, without needing a tool call to perform the write",
-      "They automatically cache every tool call result so repeated queries return instantly",
-      "They replace the need for tool descriptions entirely, since the resource itself explains what is available"
+      "They expose content catalogues (like a database schema) up front, saving the exploratory tool calls otherwise needed to discover what's available",
+      "They let agents modify data directly, without needing a tool call to perform the write, which makes updates cheaper",
+      "They automatically cache every tool call result, so repeated queries return instantly without hitting the server again",
+      "They replace the need for tool descriptions entirely, since the resource itself explains to the agent exactly what data is available and how each tool should be used"
     ],
     "correctIndex": 0,
-    "explanation": "Resources give an agent visibility into available data (like a full database schema) without spending tool calls just discovering it — for example, avoiding a list_tables-then-describe_table-per-table sequence. \"Tools let them act on it\" — resources don't handle caching; that's an unrelated concern from exposing a content catalogue up front. Resources don't replace tool descriptions either — a resource tells the agent what data exists, not what a tool does or how to call it, so descriptions are still needed for actual tool selection and use. And resources don't let agents modify data directly — they're read-only visibility; any actual write still requires a real tool call.",
+    "explanation": "Resources give an agent visibility into available data (like a full database schema) without spending tool calls just discovering it — for example, avoiding a list_tables-then-describe_table-per-table sequence. Resources don't handle caching; that's an unrelated concern from exposing a content catalogue up front. Resources don't replace tool descriptions either — a resource tells the agent what data exists, not what a tool does or how to call it, so descriptions are still needed for actual tool selection and use. And resources don't let agents modify data directly — they're read-only visibility; any actual write still requires a real tool call.",
     "references": [
       "Model Context Protocol Specification"
     ],
@@ -990,9 +990,9 @@
     "mode": "scenario",
     "prompt": "A team needs to integrate with Jira and is deciding whether to build a custom MCP server or use an existing one. According to the standard build-vs-use decision, what should they do first?",
     "options": [
-      "Skip MCP entirely and use direct API calls instead",
+      "Skip MCP entirely and call the Jira REST API directly from the agent's code, since a direct integration needs no ongoing maintenance",
       "Evaluate existing community MCP servers first, since Jira is a standard integration likely already covered and maintained",
-      "Build a custom server immediately, since custom servers are always more reliable"
+      "Build a custom server immediately, since custom servers are always more reliable than community ones"
     ],
     "correctIndex": 1,
     "explanation": "Community MCP servers should be evaluated first for standard integrations like Jira, GitHub, or Slack — they're maintained, tested, and already cover typical use cases. Custom servers are reserved for team-specific workflows or proprietary systems that community servers don't cover, not as a default first choice — 'always more reliable' overstates it, since a custom build also means the team now owns all its maintenance and bug-fixing. Skipping MCP for direct API calls throws away the whole point of a shared, tool-callable interface the model can use consistently, in favor of one-off integration code.",
@@ -1008,10 +1008,10 @@
     "mode": "scenario",
     "prompt": "An MCP tool for querying an internal database has a one-line description: 'queries the database.' The agent frequently ignores it in favor of a built-in tool with a much richer description, even when the MCP tool would clearly be more appropriate. What's the fix?",
     "options": [
-      "Switch the internal database to a completely different MCP server implementation entirely",
-      "Remove the built-in tool entirely so the MCP tool becomes the agent's only available option",
-      "Enhance the MCP tool's description to explain its capabilities, outputs, when to use it, and how it compares to the built-in alternative, in similar detail",
-      "Nothing can be done — this reflects an inherent, unfixable limitation of MCP tools generally"
+      "Switch the internal database to a completely different MCP server implementation, since the current server is why the agent keeps passing over its tool",
+      "Remove the built-in tool entirely, so the MCP tool becomes the agent's only available option for database queries and can't be ignored",
+      "Rewrite the MCP tool's description to cover its capabilities, outputs and when to use it versus the built-in tool, in comparable detail",
+      "Nothing can be done: agents always prefer built-in tools over MCP tools, which is an inherent, unfixable limitation of MCP itself"
     ],
     "correctIndex": 2,
     "explanation": "A sparse MCP tool description loses out to a richer built-in one — the fix is enhancing the MCP description with the same level of detail, not removing options or accepting the limitation as permanent. Switching to a different MCP server doesn't address the actual cause at all — the problem is the description text on the existing tool, not which server hosts it; a different server would have the same sparse-description problem unless its description was also rewritten. Removing the built-in tool forces a workaround but leaves the real defect — the sparse description — untouched, and loses a capability the agent may still need elsewhere. Treating this as an inherent limitation is incorrect; it's the same fixable description-quality issue that applies to any tool, MCP or built-in.",
@@ -1046,10 +1046,10 @@
     "mode": "quick-fire",
     "prompt": "An Edit call fails because the target text appears multiple times in the file, making the match non-unique. What's the correct next step?",
     "options": [
-      "Widen old_string with more surrounding context until it matches only one location, or set replace_all: true if every occurrence should change",
-      "Give up on programmatic editing and ask the user to edit manually",
-      "Retry the same Edit call repeatedly until it succeeds",
-      "Fall back to Read the full file, then Write the complete modified version immediately"
+      "Add more surrounding context to old_string until it matches only one place, or set replace_all: true if every occurrence should change",
+      "Give up on programmatic editing and ask the user to make the change manually, since Edit can't handle repeated text",
+      "Retry the same Edit call a few more times, since a non-unique match can resolve itself on a later attempt",
+      "Fall back to Read on the full file, then immediately Write back the complete modified version with the change applied"
     ],
     "correctIndex": 0,
     "explanation": "When Edit fails due to non-unique text, the documented recovery is to widen old_string with more surrounding context until it pins down exactly one location, or set replace_all: true if every occurrence should actually change — both keep you on Edit and cost almost no extra context. Jumping straight to Read + Write is an explicitly penalized anti-pattern: it loads and rewrites the entire file for what's usually a one-line change, when Edit could have resolved it directly. Read + Write is the last-resort fallback only when neither widening the anchor nor replace_all can disambiguate the target — not the next step. Retrying the identical call changes nothing, since the ambiguity is still there. Asking the user to intervene manually skips a fix Edit itself can resolve.",
@@ -1065,10 +1065,10 @@
     "mode": "quick-fire",
     "prompt": "What's the recommended approach to understanding an unfamiliar codebase, in terms of context budget?",
     "options": [
-      "Use Grep to find entry points, then Read only the specific files that trace from those entry points, justified step by step",
-      "Use Glob to list every file, then Read them all in alphabetical order",
-      "Skip Grep entirely and rely only on Read",
-      "Read every file in the repository upfront so nothing is missed"
+      "Grep for entry points, then Read only the files that trace from them, justifying each step",
+      "Use Glob to list every file, then Read them all in alphabetical order so nothing is skipped",
+      "Skip Grep entirely and rely only on Read, opening files one at a time as they seem relevant",
+      "Read every file in the repository upfront, so the full picture is in context before any analysis"
     ],
     "correctIndex": 0,
     "explanation": "The incremental approach — Grep for entry points, then Read only what those entry points lead to, tracing outward as justified — avoids burning context budget on files that turn out to be irrelevant. Skipping Grep entirely and relying only on Read removes the one mechanism that narrows down which files are actually relevant before you spend tokens reading them. Using Glob to list every file and reading them all in alphabetical order still means reading everything — Glob just changes the order, it doesn't reduce what gets read. Reading every file in the repository upfront is explicitly called out as a context-budget killer — the single costliest exploration mistake.",
@@ -1084,9 +1084,9 @@
     "mode": "scenario",
     "prompt": "You need to find where a function is used across a codebase, but it's defined in one module, re-exported through a wrapper/barrel file, and consumers only ever import it by the wrapper's name. A simple Grep for the original function name turns up almost no results. What's the correct approach?",
     "options": [
-      "Grep for the function definition, Read the defining file to find its exported names, then Grep for each exported name (including the barrel file's module name if re-exported) across the codebase",
-      "Give up on static tracing entirely and ask the team directly which files still depend on the function",
-      "Conclude the function is unused and safe to remove, since the near-empty Grep result suggests nothing references it anymore"
+      "Grep for the definition, Read that file and the barrel that re-exports it to see its exported names, then Grep for each, including the barrel module's name",
+      "Give up on static tracing and ask the team directly which files still depend on the function — re-exports can't be followed by text search at all",
+      "Conclude the function is unused and safe to remove, since the near-empty Grep result shows that almost nothing references it anymore"
     ],
     "correctIndex": 0,
     "explanation": "Indirect consumers via a wrapper require tracing the re-export chain: find the definition, identify what names it's exported under, and search for each of those — including the barrel file's own module name if it's re-exported through one. A near-empty Grep result for the original name doesn't mean the function is unused; it means most consumers reference it by a different, re-exported name — concluding it's safe to remove risks breaking every one of those indirect callers. Giving up on static tracing skips a fix that's fully achievable by tracing the re-export chain yourself — asking the team is a fallback for when static analysis genuinely can't resolve something, not for a standard wrapper-module pattern like this one.",
@@ -1102,10 +1102,10 @@
     "mode": "scenario",
     "prompt": "You need to find every file that calls a deprecated function, and also find the existing test files for those callers. What's the correct tool sequence and order?",
     "options": [
-      "Use only Grep for both steps, since it can also match file names",
-      "Glob first to find all files, then Grep each one for the function call",
-      "Use only Glob for both steps, since test files usually follow predictable naming",
-      "Grep for the function name to find callers (content search), then Glob for test files matching those caller filenames (path matching)"
+      "Use only Grep for both steps, since the test files will always reference the deprecated function too and show up in the same content search",
+      "Glob first to list every file in the repository, then Grep each of those files for the deprecated function call",
+      "Use only Glob for both steps, since callers and their test files both follow predictable, searchable naming patterns across the repo",
+      "Grep for the function name to find its callers (content search), then Glob for test files named after those callers (path matching)"
     ],
     "correctIndex": 3,
     "explanation": "This is the 'Grep then Glob' pattern: content search first to identify the actual callers by their function usage, then path matching to find test files named after those specific callers. Grep alone can't reliably match file naming patterns for tests. Glob alone can't search inside file contents to find who calls the deprecated function in the first place. Reversing the order — Glob first, then Grep each result — doesn't work either: Glob would return every file in the repo since nothing yet narrows down which ones are actual callers, so you'd still have to Grep every single one of those results for the function call, which is just a slower detour to the same content search Grep alone does directly. It also doesn't get you to the test files any faster, since the whole point of the Glob step is to match test-file naming patterns keyed off the specific callers Grep already found — a step that can't happen before Grep has run.",
