@@ -12,7 +12,7 @@ A phone-first study app: one question at a time instead of scrolling. Its questi
   <img src="docs/screenshots/progress.png" width="250" alt="Study Hub showing per-topic progress bars">
 </p>
 
-240 questions on JavaScript, backend engineering and CCAF certification prep. Every answer is explained, with a ready-made prompt to take to an LLM for more. No accounts, streaks or scores.
+Topic-agnostic and easy to customize: point the pipeline at any subject and it builds a reviewed question bank for it (the live app has 240). Every answer is explained, with a ready-made prompt to take to an LLM for more. No accounts, streaks or scores.
 
 ## The content pipeline
 
@@ -27,8 +27,8 @@ Three [Claude Code](https://claude.com/claude-code) commands ([`.claude/commands
 
 | Issue | What the pipeline does now |
 |---|---|
-| The correct answer was clearly the longest option in 97% of JavaScript questions | Measured on every batch; flagged questions are dropped. Now 0% across all topics |
-| Answer positions skewed: "A" was correct in 42% of backend questions | Positions are assigned in code, never by the model. Now ~25% each |
+| The correct answer was clearly the longest option in 97% of one topic's questions | Measured on every batch; flagged questions are dropped. Now 0% across all topics |
+| Answer positions skewed: "A" was correct in 42% of another topic's questions | Positions are assigned in code, never by the model. Now ~25% each |
 | Explanations cited "Option B", which pointed at the wrong option once options moved | Hard failure in the check |
 | Reasoning added to a wrong option was itself true, making it defensible | The reviewer checks for this explicitly |
 | Correct options *sound* different: brackets and examples on the right answer, "always"/"never" on the wrong ones | Measured and reported on every batch; cleanup is next |
