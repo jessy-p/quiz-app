@@ -2,7 +2,7 @@
 
 A phone-first study app: one question at a time instead of scrolling. Its question bank is written and checked by an AI content pipeline that doesn't trust its own output.
 
-**[Try it on your phone →](LIVE_DEMO_URL)** · works offline · installable
+**[Try it on your phone →](https://quiz-app-kappa-two-11.vercel.app)** · works offline · installable
 
 <p align="center">
   <img src="docs/screenshots/question.png" width="250" alt="A scenario question about Promise.all with four answer options">
