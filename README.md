@@ -17,7 +17,7 @@ A phone-first study app: one question at a time instead of scrolling. Its questi
 ## Highlights
 
 - **The generator never grades itself.** Three Claude Code commands ([`.claude/commands/`](.claude/commands/)) run the content pipeline: `/discuss` plans a batch, `/generate` writes it in parallel subagents and has a separate reviewer try to break it (plus a fact-checker for fast-moving topics), and `/merge` waits for a human sign-off.
-- **A bias the AI reviewer missed, fixed in code.** In JavaScript, the correct answer was clearly the longest option 97% of the time; in backend, it was "A" 42% of the time. Deterministic checks ([`scripts/check-bias.mjs`](scripts/check-bias.mjs)) now run on every batch, and answer positions are assigned in code. The re-review also caught three errors that had been in the bank all along.
+- **Answer bias, caught and fixed.** Testing showed the correct answer was clearly the longest option in 97% of JavaScript questions, and "A" in 42% of backend ones. Deterministic checks ([`scripts/check-bias.mjs`](scripts/check-bias.mjs)) now run on every batch, and answer positions are assigned in code.
 - **Offline-first.** A hand-written, 70-line service worker ([`public/sw.js`](public/sw.js)). Answering never touches the network.
 - **One endpoint, locked.** The optional progress backup (Vercel Blob) requires a shared secret. Visitors' progress never leaves their browser.
 - **Decisions on paper.** [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) (spec) and [`PLAN.md`](PLAN.md) (build log), including what was deliberately left out and why.
