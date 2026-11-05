@@ -47,8 +47,8 @@ Three [Claude Code](https://claude.com/claude-code) commands (in [`.claude/comma
 ## Run locally
 
 ```bash
-git clone https://github.com/jessy-p/quiz-app.git
-cd quiz-app
+git clone https://github.com/jessy-p/study-loop.git
+cd study-loop
 npm install
 npm run dev
 ```
