@@ -20,7 +20,7 @@ Three [Claude Code](https://claude.com/claude-code) commands ([`.claude/commands
 
 - **`/discuss`** plans a batch: reads current coverage per topic, splits the request into non-overlapping sections, and decides per section whether facts need web verification.
 - **`/generate`** writes each section in a parallel subagent, then hands the batch to agents that didn't write it: an adversarial reviewer that tries to break every question, and a web-searching fact-checker for fast-moving topics. It also accepts questions written elsewhere and runs the same checks. Anything that fails is dropped, never quietly patched.
-- **Mechanical checks** ([`check-bias.mjs`](scripts/check-bias.mjs)) run on every batch: answer-position spread, whether the correct answer stands out by length or wording, and explanations that cite options by letter.
+- **Mechanical checks** ([`check-bias.mjs`](scripts/check-bias.mjs)) run on every batch: answer-position spread, whether the correct answer stands out by length or wording, and explanations that cite options by letter. A [Claude Code hook](.claude/settings.json) also runs them automatically whenever Claude edits question files, and blocks on a hard failure, so the rules don't depend on Claude remembering them.
 - **`/merge`** waits for a human sign-off, assigns answer positions in code ([`rebalance-positions.mjs`](scripts/rebalance-positions.mjs)), and reports bias stats for the whole bank.
 
 ### Issues it caught, and what changed
