@@ -17,15 +17,21 @@ If `$1` was given, use `data/_staging/$1` (or the literal path if it already inc
 
 Read the staged file. Confirm it's a JSON array and every entry has the required `Question` fields (`types/question.ts`): `id`, `topic`, `mode`, `prompt`, `options`, `correctIndex` (in range), `explanation`, `references`, `teachMePrompt`, `doubleCheckPrompt`. If anything is malformed, report exactly what and stop — don't attempt to guess-fix it.
 
+Then run `node scripts/check-bias.mjs data/_staging/<file>`. If it exits non-zero (an explanation refers to options by letter/number), report the IDs and stop. That content would point at the wrong option after Step 4's reordering. Otherwise keep its output for the skim summary.
+
 ## Step 2 — Skim summary
 
 Print a scannable summary, one line per question: topic, mode, and the prompt (truncate if long). This is a **general skim, not a per-question audit** — the point is to sanity-check the batch shape (right topics, right mix, nothing obviously off), not to re-review references or re-verify facts. If the user asks to see any specific one in full, show it.
+
+Include the bias check's "longest-answer tell" line from Step 1. `/generate` already drops questions with that tell, so it should be at or near 0. A higher number means the batch skipped `/generate`'s check, which is worth pointing out before merging.
 
 ## Step 3 — Confirm
 
 Ask for confirmation via AskUserQuestion: merge the whole batch, or let the user name specific ones to drop first (they may just say so in plain chat — e.g. "drop the third one" — since this is a conversation, not a form). Do not merge without an explicit go-ahead. This is the real remaining checkpoint in the pipeline — treat it as such, don't rubber-stamp past it.
 
 ## Step 4 — Assign real IDs and merge, per topic
+
+First, after any drops the user asked for in Step 3, run `node scripts/rebalance-positions.mjs data/_staging/<file>`. It reorders each question's options so correct answers are spread evenly across positions, since generators cluster them, and updates `correctIndex`. Don't hand-edit positions.
 
 Topics are open (any lowercase-hyphenated slug — see `types/question.ts`), so there's no fixed prefix table. **The ID prefix is the topic slug itself** — a `capitals-and-countries` question gets IDs like `capitals-and-countries-0001`. Simple and collision-free without needing to invent or maintain an abbreviation per topic.
 
@@ -43,4 +49,4 @@ For each topic present in the confirmed batch:
 
 ## Step 6 — Report
 
-Print what got merged (question count per topic, the new ID range assigned), and new total counts per topic in the live bank.
+Print what got merged (question count per topic, the new ID range assigned), and new total counts per topic in the live bank. Then run `node scripts/check-bias.mjs` on the live bank and include its per-topic position spread and longest-answer-tell rate, so drift is visible batch over batch.
