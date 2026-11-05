@@ -1,6 +1,6 @@
 # Study Loop
 
-A phone-first study app: one question at a time instead of scrolling. Its question bank is written and checked by an AI pipeline that doesn't trust its own output.
+A phone-first study app: one question at a time instead of scrolling. Its question bank is written and checked by an AI content pipeline that doesn't trust its own output.
 
 **[Try it on your phone →](LIVE_DEMO_URL)** · works offline · installable
 
@@ -14,23 +14,32 @@ A phone-first study app: one question at a time instead of scrolling. Its questi
 
 240 questions on JavaScript, backend engineering and CCAF certification prep. Every answer is explained, with a ready-made prompt to take to an LLM for more. No accounts, streaks or scores.
 
-## Highlights
+## The content pipeline
 
-- **The generator never grades itself.** Three Claude Code commands ([`.claude/commands/`](.claude/commands/)) run the content pipeline: `/discuss` plans a batch, `/generate` writes it in parallel subagents and has a separate reviewer try to break it (plus a fact-checker for fast-moving topics), and `/merge` waits for a human sign-off.
-- **Answer bias, caught and fixed.** Testing showed the correct answer was clearly the longest option in 97% of JavaScript questions, and "A" in 42% of backend ones. Deterministic checks ([`scripts/check-bias.mjs`](scripts/check-bias.mjs)) now run on every batch, and answer positions are assigned in code.
+Three [Claude Code](https://claude.com/claude-code) commands ([`.claude/commands/`](.claude/commands/)) plus deterministic checks ([`scripts/`](scripts/)):
+
+- **`/discuss`** plans a batch: reads current coverage per topic, splits the request into non-overlapping sections, and decides per section whether facts need web verification.
+- **`/generate`** writes each section in a parallel subagent, then hands the batch to agents that didn't write it: an adversarial reviewer that tries to break every question, and a web-searching fact-checker for fast-moving topics. It also accepts questions written elsewhere and runs the same checks. Anything that fails is dropped, never quietly patched.
+- **Mechanical checks** ([`check-bias.mjs`](scripts/check-bias.mjs)) run on every batch: answer-position spread, whether the correct answer stands out by length or wording, and explanations that cite options by letter.
+- **`/merge`** waits for a human sign-off, assigns answer positions in code ([`rebalance-positions.mjs`](scripts/rebalance-positions.mjs)), and reports bias stats for the whole bank.
+
+### Issues it caught, and what changed
+
+| Issue | What the pipeline does now |
+|---|---|
+| The correct answer was clearly the longest option in 97% of JavaScript questions | Measured on every batch; flagged questions are dropped. Now 0% across all topics |
+| Answer positions skewed: "A" was correct in 42% of backend questions | Positions are assigned in code, never by the model. Now ~25% each |
+| Explanations cited "Option B", which pointed at the wrong option once options moved | Hard failure in the check |
+| Reasoning added to a wrong option was itself true, making it defensible | The reviewer checks for this explicitly |
+| Correct options *sound* different: brackets and examples on the right answer, "always"/"never" on the wrong ones | Measured and reported on every batch; cleanup is next |
+
+## The app
+
 - **Offline-first.** A hand-written, 70-line service worker ([`public/sw.js`](public/sw.js)). Answering never touches the network.
 - **One endpoint, locked.** The optional progress backup (Vercel Blob) requires a shared secret. Visitors' progress never leaves their browser.
 - **Decisions on paper.** [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) (spec) and [`PLAN.md`](PLAN.md) (build log), including what was deliberately left out and why.
 
-| Answer-bias fix | Before | After |
-|---|---|---|
-| Correct answer clearly the longest (JavaScript) | 97% | 0% |
-| Correct-answer position A/B/C/D (backend) | 42 / 32 / 16 / 10% | 26 / 26 / 25 / 23% |
-| Explanations citing options by letter, mostly the wrong one | 74 | 0 |
-
-Backend and CCAF option rewrites are next.
-
-Built spec-first with [Claude Code](https://claude.com/claude-code), reviewing generated code and content against the spec.
+Built spec-first with Claude Code, reviewing generated code and content against the spec.
 
 **Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Vercel + Blob
 
@@ -47,5 +56,5 @@ Node 20+. No environment variables needed: progress lives in `localStorage`.
 
 ## Make it yours
 
-- **Questions:** add `data/questions/<topic>.json` (schema in [`types/question.ts`](types/question.ts)) and register it in [`lib/questionPool.ts`](lib/questionPool.ts), or generate a set with `/discuss`, `/generate` and `/merge` in Claude Code.
+- **Questions:** add `data/questions/<topic>.json` (schema in [`types/question.ts`](types/question.ts)) and register it in [`lib/questionPool.ts`](lib/questionPool.ts), or generate a set with `/discuss`, `/generate` and `/merge` in Claude Code. Check any bank with `node scripts/check-bias.mjs`.
 - **Deploy:** import the repo into [Vercel](https://vercel.com/new). For the optional backup, see [`.env.example`](.env.example).
