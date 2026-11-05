@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Serif_4, Inter, IBM_Plex_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { BackupOptIn } from "@/components/BackupOptIn";
 import { StudyModeProvider } from "@/components/StudyModeProvider";
 import "./globals.css";
 
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-bg text-ink font-sans">
         <StudyModeProvider>{children}</StudyModeProvider>
         <ServiceWorkerRegister />
+        <BackupOptIn />
       </body>
     </html>
   );

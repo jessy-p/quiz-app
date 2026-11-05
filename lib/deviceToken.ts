@@ -2,8 +2,8 @@ const DEVICE_TOKEN_KEY = "study-loop:deviceToken";
 
 /**
  * Random per-device identifier, generated once and persisted in
- * localStorage. Not real auth — just enough that the backup endpoint isn't
- * wide open to anyone who finds the URL. See PROJECT_BRIEF.md — State & storage.
+ * localStorage. Only used to name this device's backup file — access control
+ * is the backup secret (see backupSync.ts), not this token.
  */
 export function getDeviceToken(): string {
   const existing = localStorage.getItem(DEVICE_TOKEN_KEY);
