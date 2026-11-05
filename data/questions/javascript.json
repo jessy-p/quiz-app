@@ -11,7 +11,7 @@
       "Use `class Circle extends Shape { constructor(color, radius) { super(color); this.radius = radius; } area() { ... } }`, letting `extends`/`super` handle the shared setup and prototype chain, with each subclass overriding `area()`"
     ],
     "correctIndex": 3,
-    "explanation": "`extends` sets up the prototype chain automatically and `super(color)` reuses the parent's constructor logic without duplicating it, while each subclass's own `area()` naturally overrides the inherited one via prototype lookup \u2014 this is exactly what class-based prototypal inheritance is for. Option A reintroduces the duplication inheritance exists to avoid. Option C is a fragile, unmaintainable god-method that fights against polymorphism instead of using it. Option D is wrong because `static` properties belong to the class itself, not instances, so every `Circle` and `Square` would incorrectly share one single `color` value.",
+    "explanation": "`extends` sets up the prototype chain automatically and `super(color)` reuses the parent's constructor logic without duplicating it, while each subclass's own `area()` naturally overrides the inherited one via prototype lookup \u2014 this is exactly what class-based prototypal inheritance is for. Copying the constructor logic into every subclass reintroduces the duplication inheritance exists to avoid. Branching on `this.constructor.name` inside a single `area()` is a fragile, unmaintainable god-method that fights against polymorphism instead of using it. Storing `color` as a static property is wrong because `static` properties belong to the class itself, not instances, so every `Circle` and `Square` would incorrectly share one single `color` value.",
     "teachMePrompt": "I just learned that `extends`/`super` is the idiomatic way to share constructor logic while letting subclasses override specific methods via the prototype chain. Teach me the full mental model behind it \u2014 how JS classes are prototypal inheritance under syntactic sugar, what `super` actually does at both the constructor and method level, how method resolution walks the prototype chain, and where composition (mixins, has-a) might be a better fit than inheritance (is-a) for this kind of problem. Don't just confirm this one design \u2014 show me the inheritance vs composition tradeoff.",
     "doubleCheckPrompt": "Is it accurate that `static` properties are attached to the class itself and shared across all instances, rather than being per-instance? Cite sources.",
     "references": [
@@ -31,7 +31,7 @@
       "Any plain object is already immutable by default in JavaScript once assigned with `const`"
     ],
     "correctIndex": 2,
-    "explanation": "`Object.freeze()` is the strictest of the three: it blocks adding new properties, deleting existing ones, and reassigning existing property values. `preventExtensions` only stops new properties from being added while existing ones remain freely editable and deletable, and `seal` adds deletion-prevention on top of that but still permits value reassignment on existing properties. Option D is a common misconception \u2014 `const` only prevents reassigning the variable binding itself, not mutating the object it points to.",
+    "explanation": "`Object.freeze()` is the strictest of the three: it blocks adding new properties, deleting existing ones, and reassigning existing property values. `preventExtensions` only stops new properties from being added while existing ones remain freely editable and deletable, and `seal` adds deletion-prevention on top of that but still permits value reassignment on existing properties. Believing `const` makes an object immutable is a common misconception \u2014 `const` only prevents reassigning the variable binding itself, not mutating the object it points to.",
     "teachMePrompt": "I just learned that `Object.freeze`, `Object.seal`, and `Object.preventExtensions` form a strictness ladder, with freeze being the strictest. Teach me the full mental model behind it \u2014 exactly what each of the three permits and blocks, why freeze is still only shallow (nested objects inside a frozen object remain mutable unless you deep-freeze), how `Object.isFrozen`/`isSealed`/`isExtensible` let you check state, and how this differs from `const`'s binding-only immutability. Don't just rank the three \u2014 show me the full picture including the shallow-freeze gotcha.",
     "doubleCheckPrompt": "Is it accurate that `Object.freeze()` only performs a shallow freeze, meaning nested objects within the frozen object can still be mutated? Cite sources.",
     "references": [
@@ -128,7 +128,7 @@
       "It belongs to the concept of the class as a whole rather than any individual instance \u2014 e.g. a factory method like `Point.origin()`, a shared counter of how many instances exist, or a utility/helper function that doesn't need `this`"
     ],
     "correctIndex": 3,
-    "explanation": "`static` members are attached to the class itself, not to `this` of any instance, making them ideal for functionality that's conceptually about the class as a whole \u2014 factory methods, shared counters, or namespaced utilities. Privacy (option A) is unrelated and requires the separate `#` private field syntax; there's no general performance guarantee (option C); and static isn't mandatory syntax at all (option D).",
+    "explanation": "`static` members are attached to the class itself, not to `this` of any instance, making them ideal for functionality that's conceptually about the class as a whole \u2014 factory methods, shared counters, or namespaced utilities. Privacy is unrelated and requires the separate `#` private field syntax; there's no general performance guarantee; and static isn't mandatory syntax at all.",
     "references": [
       "MDN: static"
     ],
@@ -223,7 +223,7 @@
       "`this` inside any nested function always automatically refers to the same object as the outer method's `this`"
     ],
     "correctIndex": 2,
-    "explanation": "When a regular function is defined inside a method and then called on its own (e.g. as a callback inside `forEach`), it gets a fresh `this` determined by its own call, not inherited from the enclosing method \u2014 typically `undefined` in strict mode or the global object otherwise. Arrow functions specifically avoid this because they don't have their own `this` at all, inheriting it lexically instead, which is the opposite of option C's claim.",
+    "explanation": "When a regular function is defined inside a method and then called on its own (e.g. as a callback inside `forEach`), it gets a fresh `this` determined by its own call, not inherited from the enclosing method \u2014 typically `undefined` in strict mode or the global object otherwise. Arrow functions specifically avoid this because they don't have their own `this` at all, inheriting it lexically instead, which is the opposite of the claim that arrow functions share this pitfall.",
     "references": [
       "MDN: this"
     ],
@@ -242,7 +242,7 @@
       "Factory pattern, since it's about creating objects generically"
     ],
     "correctIndex": 1,
-    "explanation": "The Singleton pattern exists specifically to guarantee a single, shared instance and a single access point to it \u2014 exactly the constraint described. Factory (option A) solves object *creation* variety, not instance uniqueness; Observer (option C) solves notification/subscription, which might be layered on top of a settings singleton but isn't the core problem stated; Decorator (option D) solves adding behavior to existing objects, unrelated to instance count.",
+    "explanation": "The Singleton pattern exists specifically to guarantee a single, shared instance and a single access point to it \u2014 exactly the constraint described. Factory solves object *creation* variety, not instance uniqueness; Observer solves notification/subscription, which might be layered on top of a settings singleton but isn't the core problem stated; Decorator solves adding behavior to existing objects, unrelated to instance count.",
     "teachMePrompt": "I just learned the Singleton pattern guarantees a single shared instance with one global access point, commonly implemented via ES modules (since a module is only evaluated once). Teach me the full mental model behind it \u2014 how ES modules make the classic 'private constructor + static getInstance()' Singleton pattern largely unnecessary in JS, why Singletons are controversial (global state making testing harder, hidden dependencies), and when a Singleton is genuinely the right call versus dependency injection. Don't just confirm the pattern match \u2014 show me the tradeoffs and JS-specific implementation nuances.",
     "doubleCheckPrompt": "Is it accurate that a JS module effectively behaves as a Singleton by default, since the module system caches and reuses the same module instance across all importers? Cite sources.",
     "references": [
@@ -262,7 +262,7 @@
       "Observer pattern, so each exporter type can subscribe to a shared event"
     ],
     "correctIndex": 0,
-    "explanation": "The Factory pattern centralizes and hides object-creation logic behind a single creation function, letting callers ask for 'a CSV exporter' without knowing or caring about the concrete class or constructor involved \u2014 exactly the scenario described. Strategy (option D) is a close cousin but is about swapping interchangeable *algorithms/behaviors* at runtime on an existing object, not about the object-creation decision itself, which is the more precise match here. Observer and Singleton solve unrelated problems (notification and instance-count, respectively).",
+    "explanation": "The Factory pattern centralizes and hides object-creation logic behind a single creation function, letting callers ask for 'a CSV exporter' without knowing or caring about the concrete class or constructor involved \u2014 exactly the scenario described. Strategy is a close cousin but is about swapping interchangeable *algorithms/behaviors* at runtime on an existing object, not about the object-creation decision itself, which is the more precise match here. Observer and Singleton solve unrelated problems (notification and instance-count, respectively).",
     "teachMePrompt": "I just learned Factory centralizes object-creation decisions behind one function, hiding concrete classes from the caller. Teach me the full mental model behind it \u2014 how Factory differs from the closely related Abstract Factory and Builder patterns, why Factory and Strategy are often confused (both involve runtime decision-making, but at different points \u2014 creation vs behavior), and realistic JS examples like `document.createElement()` as a built-in factory. Don't just confirm the match \u2014 show me how Factory relates to its pattern-family neighbors.",
     "doubleCheckPrompt": "Is it accurate that the Strategy pattern is about swapping interchangeable behavior on an already-existing object, distinct from the Factory pattern's focus on the object-creation step itself? Cite sources.",
     "references": [
@@ -281,7 +281,7 @@
       "Observer pattern, where subjects maintain a list of subscribed observers and notify all of them when a relevant event occurs, decoupling the event source from anything reacting to it"
     ],
     "correctIndex": 3,
-    "explanation": "Observer is precisely for this one-to-many notification relationship, where a subject broadcasts events to any number of subscribed listeners without needing to know who or how many are listening \u2014 the same core idea behind DOM events and Node's `EventEmitter`. Command (option B) is about encapsulating an action as a reusable/undoable object, Decorator (option C) about wrapping behavior onto individual objects, and Module (option D) about code organization/privacy \u2014 none address the multi-listener broadcast requirement.",
+    "explanation": "Observer is precisely for this one-to-many notification relationship, where a subject broadcasts events to any number of subscribed listeners without needing to know who or how many are listening \u2014 the same core idea behind DOM events and Node's `EventEmitter`. Command is about encapsulating an action as a reusable/undoable object, Decorator about wrapping behavior onto individual objects, and Module about code organization/privacy \u2014 none address the multi-listener broadcast requirement.",
     "teachMePrompt": "I just learned the Observer pattern decouples a subject from any number of listeners reacting to its events. Teach me the full mental model behind it \u2014 how Observer relates to the Pub/Sub pattern (subtle difference: direct subject-observer reference vs a mediating event bus), how DOM events and Node's EventEmitter are real-world Observer implementations, and common pitfalls like forgetting to unsubscribe listeners causing memory leaks. Don't just confirm the pattern match \u2014 show me Observer vs Pub/Sub and the cleanup pitfall.",
     "doubleCheckPrompt": "Is it accurate that the Observer pattern and the Pub/Sub pattern are related but distinct, with Observer typically involving direct subject-to-observer references while Pub/Sub routes through an intermediary event channel? Cite sources.",
     "references": [
@@ -301,7 +301,7 @@
       "Decorator pattern, since each payment method decorates the checkout with extra behavior"
     ],
     "correctIndex": 1,
-    "explanation": "Strategy is the textbook fit for interchangeable algorithms/behaviors sharing a common interface that can be swapped at runtime \u2014 exactly the payment-method scenario. Singleton (option B) addresses instance count, not behavior-swapping. Prototype (option C) is about efficient object cloning from a template, unrelated to selecting between algorithms. Decorator (option D) adds layered behavior onto an existing object rather than choosing between mutually exclusive alternatives.",
+    "explanation": "Strategy is the textbook fit for interchangeable algorithms/behaviors sharing a common interface that can be swapped at runtime \u2014 exactly the payment-method scenario. Singleton addresses instance count, not behavior-swapping. Prototype is about efficient object cloning from a template, unrelated to selecting between algorithms. Decorator adds layered behavior onto an existing object rather than choosing between mutually exclusive alternatives.",
     "teachMePrompt": "I just learned Strategy encapsulates interchangeable algorithms behind a common interface so they can be swapped at runtime. Teach me the full mental model behind it \u2014 how Strategy compares to simply passing a function as a parameter (which JS's first-class functions make almost trivial compared to class-based languages), when a full Strategy class hierarchy is still worth it over a plain function, and how Strategy relates to dependency injection. Don't just confirm the match \u2014 show me why JS often needs less ceremony for this pattern than class-based languages do.",
     "doubleCheckPrompt": "Is it accurate that JavaScript's first-class functions often let you implement the Strategy pattern with a plain function parameter instead of a full class hierarchy, unlike in strictly class-based languages? Cite sources.",
     "references": [
@@ -320,7 +320,7 @@
       "Command pattern, which encapsulates a request/action as a standalone object with an `execute()` method (and often an `undo()` method), so actions can be stored, queued, logged, and reversed independently of whoever triggered them"
     ],
     "correctIndex": 3,
-    "explanation": "Command is specifically designed to turn an action into a first-class object that can be stored in a history stack, executed, and reversed \u2014 exactly what an undo/redo system needs. Factory (option D) might be used internally to create command objects, but it's not what solves the undo/reversibility requirement itself. Observer and Module solve unrelated problems (notification and code organization, respectively) not central to this scenario.",
+    "explanation": "Command is specifically designed to turn an action into a first-class object that can be stored in a history stack, executed, and reversed \u2014 exactly what an undo/redo system needs. Factory might be used internally to create command objects, but it's not what solves the undo/reversibility requirement itself. Observer and Module solve unrelated problems (notification and code organization, respectively) not central to this scenario.",
     "teachMePrompt": "I just learned the Command pattern turns actions into objects with `execute()`/`undo()` methods so they can be stored in a history stack for undo/redo. Teach me the full mental model behind it \u2014 how a Command-based undo stack is actually implemented (storing commands in an array, moving a pointer for undo/redo), how Command relates to the Factory pattern often used alongside it to create command objects, and other real-world uses like macro recording or request queuing in distributed systems. Don't just confirm the pattern \u2014 show me how the undo stack mechanics actually work.",
     "doubleCheckPrompt": "Is it accurate that a typical undo/redo implementation using the Command pattern maintains a history stack and a pointer, rather than literally reversing each individual DOM/state change? Cite sources.",
     "references": [
@@ -339,7 +339,7 @@
       "It's a pattern for lazily loading modules only when the browser scrolls to them"
     ],
     "correctIndex": 0,
-    "explanation": "The Module pattern predates ES modules and uses closures (often via an IIFE) to create a private scope, returning only the specific properties/methods meant to be public \u2014 essentially manual encapsulation before native module systems existed. ES modules (option C) now provide this natively at the language level, making the manual IIFE version less necessary but conceptually the same idea.",
+    "explanation": "The Module pattern predates ES modules and uses closures (often via an IIFE) to create a private scope, returning only the specific properties/methods meant to be public \u2014 essentially manual encapsulation before native module systems existed. ES modules now provide this natively at the language level, making the manual IIFE version less necessary but conceptually the same idea.",
     "references": [
       "MDN: Module pattern"
     ],
@@ -358,7 +358,7 @@
       "Creating new objects by cloning an existing 'prototype' instance rather than instantiating from a class, useful when object creation is expensive or when you want variations of a pre-configured template"
     ],
     "correctIndex": 3,
-    "explanation": "As a design pattern, Prototype means creating new objects by copying an existing configured instance (via `Object.create` or a `.clone()` method) instead of building from scratch, which is efficient when the template object is expensive to construct or you need many similar variations. This is a related-but-distinct concept from JS's built-in prototype chain (option B), which is the language's general inheritance mechanism, not this specific creational pattern.",
+    "explanation": "As a design pattern, Prototype means creating new objects by copying an existing configured instance (via `Object.create` or a `.clone()` method) instead of building from scratch, which is efficient when the template object is expensive to construct or you need many similar variations. This is a related-but-distinct concept from JS's built-in prototype chain, which is the language's general inheritance mechanism, not this specific creational pattern.",
     "references": [
       "MDN: Object.create"
     ],
@@ -377,7 +377,7 @@
       "Delete unused methods from an object to reduce memory usage"
     ],
     "correctIndex": 1,
-    "explanation": "Decorator wraps an individual object to layer on extra behavior dynamically \u2014 e.g. wrapping a `coffee` object with `withMilk(coffee)` which returns an enhanced object \u2014 while leaving the original object and any other instances of its type completely untouched. This is distinct from modifying a shared prototype (option A), which would affect every instance globally rather than just the wrapped one, and it's a general JS pattern, not limited to any specific framework's decorator syntax (option D).",
+    "explanation": "Decorator wraps an individual object to layer on extra behavior dynamically \u2014 e.g. wrapping a `coffee` object with `withMilk(coffee)` which returns an enhanced object \u2014 while leaving the original object and any other instances of its type completely untouched. This is distinct from modifying a shared prototype, which would affect every instance globally rather than just the wrapped one, and it's a general JS pattern, not limited to any specific framework's decorator syntax.",
     "references": [
       "MDN: JavaScript Decorators proposal"
     ],
@@ -435,7 +435,7 @@
       "Started, running, and finished \u2014 mirroring a generic async task's life cycle"
     ],
     "correctIndex": 1,
-    "explanation": "A Promise starts `pending`, and can transition exactly once to either `fulfilled` (with a value) or `rejected` (with a reason) \u2014 after that it's permanently 'settled' and immutable, so calling `resolve()` or `reject()` again has no effect. There is no native 'cancelled' state (option D) \u2014 cancellation requires external mechanisms like `AbortController`.",
+    "explanation": "A Promise starts `pending`, and can transition exactly once to either `fulfilled` (with a value) or `rejected` (with a reason) \u2014 after that it's permanently 'settled' and immutable, so calling `resolve()` or `reject()` again has no effect. There is no native 'cancelled' state \u2014 cancellation requires external mechanisms like `AbortController`.",
     "references": [
       "MDN: Promise"
     ],
@@ -454,7 +454,7 @@
       "It makes asynchronous code execute synchronously, blocking the main thread until it completes"
     ],
     "correctIndex": 1,
-    "explanation": "`async`/`await` is syntactic sugar over Promises, not a replacement \u2014 an `async` function still returns a Promise, and `await` pauses only that function's execution (not the whole thread) until the awaited Promise settles, letting you write what looks like sequential code with familiar `try/catch` instead of nested `.then()`/`.catch()` chains. It does not block the JS engine's single thread (option D) and does not eliminate the need for error handling (option C) \u2014 unhandled rejections inside async functions still need catching.",
+    "explanation": "`async`/`await` is syntactic sugar over Promises, not a replacement \u2014 an `async` function still returns a Promise, and `await` pauses only that function's execution (not the whole thread) until the awaited Promise settles, letting you write what looks like sequential code with familiar `try/catch` instead of nested `.then()`/`.catch()` chains. It does not block the JS engine's single thread and does not eliminate the need for error handling \u2014 unhandled rejections inside async functions still need catching.",
     "references": [
       "MDN: async function"
     ],
@@ -473,7 +473,7 @@
       "Deeply nested callbacks ('callback hell') make error handling inconsistent (each level needs its own error check) and control flow hard to follow, whereas Promises provide a flatter chain with centralized `.catch()` handling and utilities like `Promise.all` for coordinating multiple operations"
     ],
     "correctIndex": 3,
-    "explanation": "The real cost of deeply nested callbacks isn't raw execution speed (option A is false) but structural: each nested level typically needs its own `if (err)` check, making consistent error handling tedious, and the pyramid-shaped nesting is hard to read and maintain. Promises flatten this into a linear chain with a single `.catch()` that can handle errors from any step, plus combinators like `Promise.all` for coordinating parallel work that's awkward to express with raw nested callbacks.",
+    "explanation": "The real cost of deeply nested callbacks isn't raw execution speed but structural: each nested level typically needs its own `if (err)` check, making consistent error handling tedious, and the pyramid-shaped nesting is hard to read and maintain. Promises flatten this into a linear chain with a single `.catch()` that can handle errors from any step, plus combinators like `Promise.all` for coordinating parallel work that's awkward to express with raw nested callbacks.",
     "references": [
       "MDN: Using promises"
     ],
@@ -492,7 +492,7 @@
       "There is no real difference \u2014 'asynchronous' just means a function that's marked with the `async` keyword"
     ],
     "correctIndex": 1,
-    "explanation": "Synchronous code executes top-to-bottom, each statement blocking the next until it finishes, while asynchronous operations (network requests, timers, file I/O) kick off a task and return control to the rest of the program immediately, delivering their eventual result through a callback, Promise resolution, or an `await`ed continuation. JavaScript itself remains single-threaded (option B is false) \u2014 async behavior is handled via the event loop and browser/Node APIs, not separate CPU threads for your JS code.",
+    "explanation": "Synchronous code executes top-to-bottom, each statement blocking the next until it finishes, while asynchronous operations (network requests, timers, file I/O) kick off a task and return control to the rest of the program immediately, delivering their eventual result through a callback, Promise resolution, or an `await`ed continuation. JavaScript itself remains single-threaded \u2014 async behavior is handled via the event loop and browser/Node APIs, not separate CPU threads for your JS code.",
     "references": [
       "MDN: Introducing asynchronous JavaScript"
     ],
@@ -530,7 +530,7 @@
       "`Array.from(mySet)` or the spread syntax `[...mySet]` \u2014 both work because `Set` is iterable"
     ],
     "correctIndex": 3,
-    "explanation": "`Set` implements the iterable protocol, so both `Array.from()` and spread syntax `[...mySet]` work directly and are the standard idioms. `JSON.stringify` (option A) doesn't serialize Sets meaningfully (it produces `{}`), there's no built-in `.toArray()` method on `Set` (option C), and manual looping (option D) works but isn't necessary given the built-in iterable-consuming utilities.",
+    "explanation": "`Set` implements the iterable protocol, so both `Array.from()` and spread syntax `[...mySet]` work directly and are the standard idioms. `JSON.stringify` doesn't serialize Sets meaningfully (it produces `{}`), there's no built-in `.toArray()` method on `Set`, and manual looping works but isn't necessary given the built-in iterable-consuming utilities.",
     "references": [
       "MDN: Array.from"
     ],
@@ -568,7 +568,7 @@
       "Marking a variable as immutable, similar to `const` but stricter"
     ],
     "correctIndex": 2,
-    "explanation": "`Symbol()` produces a unique, primitive value every time it's called \u2014 even `Symbol('id') !== Symbol('id')` \u2014 making it ideal for property keys that won't accidentally collide with string keys added by other code, and for implementing protocol hooks like `Symbol.iterator` that customize built-in behaviors (e.g. how an object is looped over with `for...of`) without risking a naming clash with a regular property. Option B describes `BigInt`, option C describes the `Intl` namespace, and option D is a fabricated claim \u2014 Symbols aren't a variable-immutability mechanism.",
+    "explanation": "`Symbol()` produces a unique, primitive value every time it's called \u2014 even `Symbol('id') !== Symbol('id')` \u2014 making it ideal for property keys that won't accidentally collide with string keys added by other code, and for implementing protocol hooks like `Symbol.iterator` that customize built-in behaviors (e.g. how an object is looped over with `for...of`) without risking a naming clash with a regular property. Representing huge integers describes `BigInt`, locale formatting describes the `Intl` namespace, and the immutability claim is fabricated \u2014 Symbols aren't a variable-immutability mechanism.",
     "references": [
       "MDN: Symbol"
     ],
@@ -587,7 +587,7 @@
       "`obj.property !== undefined`, since any existing property won't be undefined"
     ],
     "correctIndex": 0,
-    "explanation": "`obj.property !== undefined` (option A) gives a false negative if the property exists but was explicitly set to `undefined`. The `in` operator (option C) actually checks the entire prototype chain, not just own properties, so it can give a false positive for inherited properties like `toString`. `Object.hasOwn()` (the modern, safer alternative to `.hasOwnProperty()`) checks specifically and only for an own property's existence, independent of its value, which is why it's the most reliable choice here.",
+    "explanation": "`obj.property !== undefined` gives a false negative if the property exists but was explicitly set to `undefined`. The `in` operator actually checks the entire prototype chain, not just own properties, so it can give a false positive for inherited properties like `toString`. `Object.hasOwn()` (the modern, safer alternative to `.hasOwnProperty()`) checks specifically and only for an own property's existence, independent of its value, which is why it's the most reliable choice here.",
     "references": [
       "MDN: Object.hasOwn"
     ],
@@ -606,7 +606,7 @@
       "A deep copy is impossible in JavaScript without a third-party library"
     ],
     "correctIndex": 2,
-    "explanation": "Spread and `Object.assign` copy one level deep \u2014 top-level primitives are duplicated, but any nested object or array is copied by reference, so both the original and the copy point to the exact same nested object in memory. A true deep copy needs recursive cloning, which the native `structuredClone()` function (or historically, `JSON.parse(JSON.stringify(...))` with its own caveats) can provide, so option D is outdated.",
+    "explanation": "Spread and `Object.assign` copy one level deep \u2014 top-level primitives are duplicated, but any nested object or array is copied by reference, so both the original and the copy point to the exact same nested object in memory. A true deep copy needs recursive cloning, which the native `structuredClone()` function (or historically, `JSON.parse(JSON.stringify(...))` with its own caveats) can provide, so the claim that deep copies need a third-party library is outdated.",
     "references": [
       "MDN: structuredClone"
     ],
@@ -625,7 +625,7 @@
       "`innerHTML` is simply slower to execute; there's no security difference between the two"
     ],
     "correctIndex": 0,
-    "explanation": "`innerHTML` treats whatever string you assign to it as HTML markup to be parsed and rendered, meaning malicious embedded markup (like an `<img onerror=...>` tag) executes as real DOM content \u2014 the core mechanism behind many XSS attacks. `textContent` never parses its input as HTML at all; it's inserted as literal displayed text regardless of what characters or tags it contains, which is why it's the safer default when displaying untrusted user input. Option D's naive 'filter the word script' idea is a well-known inadequate defense, since XSS payloads don't require that literal word.",
+    "explanation": "`innerHTML` treats whatever string you assign to it as HTML markup to be parsed and rendered, meaning malicious embedded markup (like an `<img onerror=...>` tag) executes as real DOM content \u2014 the core mechanism behind many XSS attacks. `textContent` never parses its input as HTML at all; it's inserted as literal displayed text regardless of what characters or tags it contains, which is why it's the safer default when displaying untrusted user input. The naive 'filter the word script' idea is a well-known inadequate defense, since XSS payloads don't require that literal word.",
     "references": [
       "MDN: XSS",
       "MDN: textContent"
@@ -683,7 +683,7 @@
       "Build the elements inside a `DocumentFragment` (which lives outside the live DOM tree) first, then append the fragment to the real parent once, triggering only a single reflow instead of one per element"
     ],
     "correctIndex": 3,
-    "explanation": "A `DocumentFragment` is a lightweight, off-DOM container \u2014 elements appended to it don't trigger layout/reflow since it isn't part of the rendered page, so you can build up an entire batch of elements there and append the whole fragment to the real DOM in a single operation, causing just one reflow. Looping `appendChild` directly on the live parent (option A) or repeatedly reading-and-rewriting `innerHTML` (option C, which also re-parses the growing string every iteration) both cause a reflow-triggering operation on every single iteration.",
+    "explanation": "A `DocumentFragment` is a lightweight, off-DOM container \u2014 elements appended to it don't trigger layout/reflow since it isn't part of the rendered page, so you can build up an entire batch of elements there and append the whole fragment to the real DOM in a single operation, causing just one reflow. Looping `appendChild` directly on the live parent or repeatedly reading-and-rewriting `innerHTML` (which also re-parses the growing string every iteration) both cause a reflow-triggering operation on every single iteration.",
     "references": [
       "MDN: DocumentFragment"
     ],
@@ -721,7 +721,7 @@
       "You can't detect it from JavaScript itself, since that code simply won't run at all if JS is disabled; instead, use the HTML `<noscript>` tag to render fallback content that the browser only displays when JS is disabled"
     ],
     "correctIndex": 3,
-    "explanation": "There's no `navigator.javaScriptEnabled` property (option A is fabricated), and if JS is genuinely disabled, no JS \u2014 including a try/catch (option C) or a `window` check (option D) \u2014 runs at all, since the entire script is skipped by the browser. The only real solution is the declarative `<noscript>` element, which browsers are specifically built to render only when script execution is disabled, making it the sole reliable detection-and-fallback mechanism.",
+    "explanation": "There's no `navigator.javaScriptEnabled` property, and if JS is genuinely disabled, no JS \u2014 including a try/catch or a `window` check \u2014 runs at all, since the entire script is skipped by the browser. The only real solution is the declarative `<noscript>` element, which browsers are specifically built to render only when script execution is disabled, making it the sole reliable detection-and-fallback mechanism.",
     "references": [
       "MDN: noscript"
     ],
@@ -740,7 +740,7 @@
       "Manually split `window.location.href` on `?` and `&` characters and parse each piece with regex"
     ],
     "correctIndex": 0,
-    "explanation": "`URLSearchParams` is the built-in API purpose-built for parsing and working with query strings, correctly handling URL-decoding, repeated keys, and encoding edge cases that manual string-splitting (option A) tends to get wrong. There's no built-in `window.queryParams` (option C is fabricated), and query strings are absolutely readable client-side via `location.search` (option D is false).",
+    "explanation": "`URLSearchParams` is the built-in API purpose-built for parsing and working with query strings, correctly handling URL-decoding, repeated keys, and encoding edge cases that manual string-splitting tends to get wrong. There's no built-in `window.queryParams`, and query strings are absolutely readable client-side via `location.search`.",
     "references": [
       "MDN: URLSearchParams"
     ],
@@ -759,7 +759,7 @@
       "It can only write plain text, never HTML markup"
     ],
     "correctIndex": 1,
-    "explanation": "`document.write()` still technically exists (option A is false) but calling it after the page has finished loading implicitly calls `document.open()` first, which wipes out the entire existing document content \u2014 a destructive, often unintended effect. Even when used correctly during initial parsing, it forces the HTML parser to pause and process the injected content synchronously, which is why modern browsers actively block or ignore `document.write()` calls from asynchronously-loaded scripts to protect page load performance.",
+    "explanation": "`document.write()` still technically exists but calling it after the page has finished loading implicitly calls `document.open()` first, which wipes out the entire existing document content \u2014 a destructive, often unintended effect. Even when used correctly during initial parsing, it forces the HTML parser to pause and process the injected content synchronously, which is why modern browsers actively block or ignore `document.write()` calls from asynchronously-loaded scripts to protect page load performance.",
     "references": [
       "MDN: document.write"
     ],
@@ -778,7 +778,7 @@
       "Attach the click listener once on a stable parent container (e.g. the `<ul>`) instead of each `<li>`, and inside that single handler use `event.target` (or `.closest()`) to check whether the click originated from an `<li>` \u2014 this is event delegation, and it automatically covers any `<li>` added later since the event bubbles up to the parent regardless of when the child was created"
     ],
     "correctIndex": 3,
-    "explanation": "Event delegation exploits event bubbling: attaching one listener to a stable ancestor that exists from the start means any click on a descendant \u2014 including elements added long after that listener was set up \u2014 bubbles up to it and can be handled by checking `event.target`. Option B works but is wasteful and error-prone at scale (duplicate listeners, forgotten cleanup) compared to a single delegated listener. Option C (capture phase) doesn't solve the core problem of listeners needing to exist before an element does \u2014 delegation via bubbling to an existing ancestor is what solves it, regardless of phase. Option D is false; this is a standard, well-solved vanilla JS pattern.",
+    "explanation": "Event delegation exploits event bubbling: attaching one listener to a stable ancestor that exists from the start means any click on a descendant \u2014 including elements added long after that listener was set up \u2014 bubbles up to it and can be handled by checking `event.target`. Re-attaching per-item listeners every time works but is wasteful and error-prone at scale (duplicate listeners, forgotten cleanup) compared to a single delegated listener. Switching to the capture phase doesn't solve the core problem of listeners needing to exist before an element does \u2014 delegation via bubbling to an existing ancestor is what solves it, regardless of phase. It's not unfixable without a framework; this is a standard, well-solved vanilla JS pattern.",
     "teachMePrompt": "I just learned event delegation solves the 'dynamically added elements don't have listeners' problem by attaching one listener to a stable ancestor and using `event.target` to identify the actual clicked element. Teach me the full mental model behind it \u2014 how event bubbling actually works step by step (from target to root), why delegation specifically relies on bubbling rather than capturing, how `.closest()` helps when the click lands on a nested child of the intended target (like an icon inside a button), and the performance benefit of one listener vs many. Don't just fix this one to-do-list bug \u2014 show me bubbling and delegation as a complete mechanism.",
     "doubleCheckPrompt": "Is it accurate that a single event listener attached to a parent element that exists from page load will correctly handle clicks on child elements added to that parent much later, due to event bubbling? Cite sources.",
     "references": [
@@ -875,7 +875,7 @@
       "Add a `setTimeout` before every fetch call to slow down all requests uniformly"
     ],
     "correctIndex": 0,
-    "explanation": "`AbortController` is purpose-built for exactly this race-condition problem: cancelling a previous request when a newer one supersedes it prevents the stale response from ever resolving and overwriting fresher data, and it's the standard fix for search-as-you-type and similar rapid-fire request patterns. Option A doesn't solve the underlying race, just changes its timing. Option C is false \u2014 `fetch()` supports cancellation via `AbortController` natively; XHR is not required. Option D is false \u2014 browsers make no such automatic ordering guarantee for independent fetch calls.",
+    "explanation": "`AbortController` is purpose-built for exactly this race-condition problem: cancelling a previous request when a newer one supersedes it prevents the stale response from ever resolving and overwriting fresher data, and it's the standard fix for search-as-you-type and similar rapid-fire request patterns. Adding a `setTimeout` delay doesn't solve the underlying race, just changes its timing. Switching to XHR is unnecessary \u2014 `fetch()` supports cancellation via `AbortController` natively; XHR is not required. Ignoring the problem isn't safe \u2014 browsers make no such automatic ordering guarantee for independent fetch calls.",
     "teachMePrompt": "I just learned `AbortController` lets you cancel an in-flight fetch request, which is the standard fix for stale-response race conditions in rapid-fire UI patterns like search-as-you-type. Teach me the full mental model behind it \u2014 how `AbortController`/`AbortSignal` work mechanically (creating a controller, passing its `.signal` into fetch's options, calling `.abort()`), how an aborted fetch's Promise actually settles (rejects with an AbortError, which needs its own catch handling to avoid false error UI), and other use cases like timeout-based cancellation. Don't just confirm the fix \u2014 show me the mechanics and the AbortError-handling gotcha.",
     "doubleCheckPrompt": "Is it accurate that calling `.abort()` on an AbortController causes any fetch using its signal to reject with an AbortError, rather than simply resolving early with no data? Cite sources.",
     "references": [
@@ -894,7 +894,7 @@
       "There's no way to implement either a timeout or retry logic for `fetch()` in the browser"
     ],
     "correctIndex": 2,
-    "explanation": "`fetch()` has no built-in timeout or automatic retry mechanism (option A is a fabricated claim), so both need to be implemented manually: a timeout is typically built by combining `AbortController` with `setTimeout` (aborting the request once the timer fires), and retries require wrapping the fetch call in your own loop or recursive helper that catches failures and tries again up to a limit, often with a backoff delay between attempts. `Promise.race()` (option C) can be part of a timeout implementation (racing the fetch against a timer promise) but doesn't inherently time anything out on its own without an explicit timer.",
+    "explanation": "`fetch()` has no built-in timeout or automatic retry mechanism, so both need to be implemented manually: a timeout is typically built by combining `AbortController` with `setTimeout` (aborting the request once the timer fires), and retries require wrapping the fetch call in your own loop or recursive helper that catches failures and tries again up to a limit, often with a backoff delay between attempts. `Promise.race()` can be part of a timeout implementation (racing the fetch against a timer promise) but doesn't inherently time anything out on its own without an explicit timer.",
     "teachMePrompt": "I just learned `fetch()` has no native timeout or retry support, so both require manual implementation via AbortController+setTimeout and a wrapping retry loop respectively. Teach me the full mental model behind it \u2014 how to actually implement exponential backoff for retries (increasing delay between attempts to avoid hammering a struggling server), how to combine a timeout AbortController with a manually-triggered one (e.g. a Cancel button) using multiple abort reasons, and why some teams reach for a request library (like axios or ky) specifically to get these features built-in. Don't just confirm the two mechanisms are needed \u2014 show me how a proper retry-with-backoff loop is structured.",
     "doubleCheckPrompt": "Is it accurate that the native `fetch()` API provides no built-in configuration options for request timeout or automatic retries, requiring both to be hand-implemented? Cite sources.",
     "references": [
@@ -914,7 +914,7 @@
       "Sending HTTP requests and updating parts of a page with the response, without triggering a full page reload \u2014 letting web pages behave more like interactive applications instead of static documents that reload on every interaction"
     ],
     "correctIndex": 3,
-    "explanation": "AJAX (Asynchronous JavaScript and XML \u2014 though JSON is now far more common than XML in practice) refers to the technique of making HTTP requests from JavaScript and updating the DOM with the response without a full page navigation/reload, which is the foundational capability behind modern dynamic, app-like web pages. It's not a library (option B) but a technique/pattern, doesn't bypass same-origin policy (option C, which remains fully in effect for AJAX requests), and has nothing to do with replacing HTML/CSS (option D).",
+    "explanation": "AJAX (Asynchronous JavaScript and XML \u2014 though JSON is now far more common than XML in practice) refers to the technique of making HTTP requests from JavaScript and updating the DOM with the response without a full page navigation/reload, which is the foundational capability behind modern dynamic, app-like web pages. It's not a library but a technique/pattern, doesn't bypass same-origin policy (which remains fully in effect for AJAX requests), and has nothing to do with replacing HTML/CSS.",
     "references": [
       "MDN: AJAX"
     ],
@@ -933,7 +933,7 @@
       "A policy that blocks a page from loading any content at all from a different domain, including images or embedded videos"
     ],
     "correctIndex": 2,
-    "explanation": "The same-origin policy is a core browser security mechanism restricting scripts from reading responses from a different origin than the page itself, where origin is strictly defined by protocol + domain + port all matching (e.g. `https://example.com:443` and `http://example.com` are different origins due to the protocol mismatch alone). It doesn't block all cross-origin loading (option C) \u2014 images, scripts, and stylesheets can typically still be embedded cross-origin \u2014 it specifically restricts a script's ability to read the response content from a different-origin request, and it remains fully active in every modern browser (option D is false).",
+    "explanation": "The same-origin policy is a core browser security mechanism restricting scripts from reading responses from a different origin than the page itself, where origin is strictly defined by protocol + domain + port all matching (e.g. `https://example.com:443` and `http://example.com` are different origins due to the protocol mismatch alone). It doesn't block all cross-origin loading \u2014 images, scripts, and stylesheets can typically still be embedded cross-origin \u2014 it specifically restricts a script's ability to read the response content from a different-origin request, and it remains fully active in every modern browser.",
     "references": [
       "MDN: Same-origin policy"
     ],
@@ -971,7 +971,7 @@
       "This isn't exploitable unless the user is an admin"
     ],
     "correctIndex": 0,
-    "explanation": "Because `innerHTML` parses its input as real HTML, the injected `<img>` tag's deliberately-broken `src` triggers its `onerror` handler, executing the attacker's JavaScript with full access to that page's context \u2014 a classic stored XSS attack that works against any visitor viewing the comment, not just admins. Option B underestimates the risk since the broken image is exactly what triggers the malicious `onerror` payload, not a harmless side effect. Option C's word-filtering approach is a well-known inadequate defense since this exact payload doesn't contain the word 'script' at all.",
+    "explanation": "Because `innerHTML` parses its input as real HTML, the injected `<img>` tag's deliberately-broken `src` triggers its `onerror` handler, executing the attacker's JavaScript with full access to that page's context \u2014 a classic stored XSS attack that works against any visitor viewing the comment, not just admins. Dismissing it as a harmless broken image underestimates the risk since the broken image is exactly what triggers the malicious `onerror` payload, not a harmless side effect. Blocking the word 'script' is a well-known inadequate defense since this exact payload doesn't contain the word 'script' at all.",
     "teachMePrompt": "I just learned that an `<img onerror=...>` payload is a classic XSS vector that doesn't need the word 'script' at all, executing via a deliberately-broken image's error handler once inserted via `innerHTML`. Teach me the full mental model behind it \u2014 the difference between stored, reflected, and DOM-based XSS as the three main categories, why output-encoding/escaping at the point of insertion (not just input filtering) is the real defense, what Content Security Policy (CSP) adds as a second line of defense even if a sanitization bug slips through, and how frameworks like React auto-escape by default (and where that protection can still be bypassed, e.g. `dangerouslySetInnerHTML`). Don't just fix this one comment box \u2014 show me the full XSS category landscape and defense layers.",
     "doubleCheckPrompt": "Is it accurate that stored, reflected, and DOM-based XSS are recognized as the three main categories of cross-site scripting vulnerabilities, distinguished by where the malicious payload persists and executes? Cite sources.",
     "references": [
@@ -991,7 +991,7 @@
       "This is CSRF, prevented exclusively by adding a CSRF token to the login form"
     ],
     "correctIndex": 1,
-    "explanation": "Clickjacking works by layering an invisible legitimate page (via iframe) beneath a decoy UI, tricking users into unknowingly interacting with the real page underneath. The standard, browser-enforced defense is telling the browser outright to refuse framing your page from another origin, via `X-Frame-Options` or the modern `frame-ancestors` CSP directive \u2014 a purely server-side header configuration, contradicting option D. CSRF tokens (option C) address a related but distinct forged-request problem, not the visual-deception mechanism specific to clickjacking.",
+    "explanation": "Clickjacking works by layering an invisible legitimate page (via iframe) beneath a decoy UI, tricking users into unknowingly interacting with the real page underneath. The standard, browser-enforced defense is telling the browser outright to refuse framing your page from another origin, via `X-Frame-Options` or the modern `frame-ancestors` CSP directive \u2014 a purely server-side header configuration, contradicting the claim that no server-side configuration can prevent it. CSRF tokens address a related but distinct forged-request problem, not the visual-deception mechanism specific to clickjacking.",
     "teachMePrompt": "I just learned clickjacking layers an invisible real page under a decoy UI via iframe, and it's stopped with frame-blocking headers like `X-Frame-Options` or CSP's `frame-ancestors`. Teach me the full mental model behind it \u2014 the difference between `X-Frame-Options: DENY` and `SAMEORIGIN` and when each is appropriate, why `Content-Security-Policy: frame-ancestors` is now the more flexible, modern replacement (supporting a list of allowed origins, unlike X-Frame-Options), and older client-side 'frame-busting' JavaScript techniques that predate these headers and why they were unreliable. Don't just name the headers \u2014 show me why the CSP directive superseded X-Frame-Options and why old JS-based defenses failed.",
     "doubleCheckPrompt": "Is it accurate that `Content-Security-Policy: frame-ancestors` is generally considered the more modern and flexible successor to the older `X-Frame-Options` header for preventing clickjacking? Cite sources.",
     "references": [
@@ -1011,7 +1011,7 @@
       "This is SQL injection \u2014 the attacker's input closes the intended string literal early and injects new SQL logic (`OR '1'='1'` makes the WHERE clause always true, potentially returning every row), because the query is built by directly splicing untrusted text into the SQL string itself; the fix is parameterized queries/prepared statements, where user input is passed as a separate bound parameter rather than being concatenated into the query text, so the database treats it strictly as data, never as executable SQL"
     ],
     "correctIndex": 3,
-    "explanation": "String concatenation lets user input alter the actual structure of the SQL command, not just its data \u2014 here, closing the intended quoted string early and appending logic that makes the condition universally true, potentially exposing the entire table. Parameterized queries fix this at the root by sending the query template and the user's value as separate channels to the database driver, which ensures the value is always treated as literal data and can never be interpreted as SQL syntax, regardless of what characters it contains. This is a backend/database vulnerability class, unrelated to the DOM-focused XSS or CSRF vulnerabilities in the other options, and remains a live risk in modern databases whenever raw concatenation is used (option D is false).",
+    "explanation": "String concatenation lets user input alter the actual structure of the SQL command, not just its data \u2014 here, closing the intended quoted string early and appending logic that makes the condition universally true, potentially exposing the entire table. Parameterized queries fix this at the root by sending the query template and the user's value as separate channels to the database driver, which ensures the value is always treated as literal data and can never be interpreted as SQL syntax, regardless of what characters it contains. This is a backend/database vulnerability class, unrelated to the DOM-focused XSS or CSRF vulnerabilities in the other options, and remains a live risk in modern databases whenever raw concatenation is used.",
     "teachMePrompt": "I just learned SQL injection works by letting user input escape its intended data context and inject new SQL syntax, and parameterized queries fix it by keeping user input strictly separate from the query structure. Teach me the full mental model behind it \u2014 how parameterized queries/prepared statements are implemented at the driver level (placeholders like `?` or `$1` bound separately from the query string), why ORMs (like Sequelize, Prisma) generally protect against this by default, and other injection-adjacent vulnerability classes (NoSQL injection, command injection) that follow the same root pattern of untrusted input being interpreted as code/structure instead of pure data. Don't just fix this one query \u2014 show me the parameterization mechanism and the broader injection-vulnerability family.",
     "doubleCheckPrompt": "Is it accurate that parameterized queries work by sending the query structure and the user-supplied value to the database as separate, distinct components, rather than the value ever being merged into the query's text itself? Cite sources.",
     "references": [
@@ -1050,7 +1050,7 @@
       "Storing the session token in `localStorage` is always the most secure option available"
     ],
     "correctIndex": 0,
-    "explanation": "Secure auth requires several layered practices: password hashing must use a deliberately slow, salted algorithm resistant to brute-force and rainbow-table attacks (bcrypt/Argon2/scrypt, not a fast hash like plain MD5/SHA-256), all credential transmission needs HTTPS to prevent interception, and session tokens are safer in `HttpOnly` cookies (invisible to JavaScript, and thus to XSS-based theft) rather than `localStorage`, which any injected script can freely read. Option D is false \u2014 client-side choices like where to store a token directly affect the app's exposure to XSS-based credential theft.",
+    "explanation": "Secure auth requires several layered practices: password hashing must use a deliberately slow, salted algorithm resistant to brute-force and rainbow-table attacks (bcrypt/Argon2/scrypt, not a fast hash like plain MD5/SHA-256), all credential transmission needs HTTPS to prevent interception, and session tokens are safer in `HttpOnly` cookies (invisible to JavaScript, and thus to XSS-based theft) rather than `localStorage`, which any injected script can freely read. Treating authentication as purely server-side is wrong \u2014 client-side choices like where to store a token directly affect the app's exposure to XSS-based credential theft.",
     "references": [
       "MDN: Password storage",
       "OWASP: Authentication cheat sheet"
@@ -1070,7 +1070,7 @@
       "Store sensitive user data in `localStorage` since it's encrypted by default"
     ],
     "correctIndex": 0,
-    "explanation": "Anything shipped in a browser bundle \u2014 including minified or 'obfuscated' code \u2014 is fully downloadable and inspectable by any user, so genuine secrets have no safe way to live there; the correct pattern is keeping secrets exclusively server-side and exposing only a narrow, purpose-built API to the client. `localStorage` is plain, unencrypted storage readable by any script with page access (option C is a fabricated claim), and client-side code obviously does legitimately handle plenty of user data day-to-day \u2014 the concern is specifically about *secrets* and how sensitive data is transmitted/stored, not an absolute prohibition (option D).",
+    "explanation": "Anything shipped in a browser bundle \u2014 including minified or 'obfuscated' code \u2014 is fully downloadable and inspectable by any user, so genuine secrets have no safe way to live there; the correct pattern is keeping secrets exclusively server-side and exposing only a narrow, purpose-built API to the client. `localStorage` is plain, unencrypted storage readable by any script with page access, and client-side code obviously does legitimately handle plenty of user data day-to-day \u2014 the concern is specifically about *secrets* and how sensitive data is transmitted/stored, not an absolute prohibition.",
     "references": [
       "MDN: Client-side storage"
     ],
@@ -1108,7 +1108,7 @@
       "It's purely a UX nicety and has no real bearing on security"
     ],
     "correctIndex": 2,
-    "explanation": "Constraining what input is even accepted (rejecting a phone number field that contains SQL syntax, for instance) shrinks the range of malicious payloads that ever reach deeper application logic, functioning as one useful layer of defense. However, it's not sufficient alone (option C overclaims) \u2014 a determined attacker can often craft input that's syntactically 'valid' by a loose validation rule but still dangerous, which is why output encoding and parameterized queries remain necessary as the primary defenses for injection specifically. Client-side-only validation (option D) is also insufficient since it's trivially bypassed by directly calling the API.",
+    "explanation": "Constraining what input is even accepted (rejecting a phone number field that contains SQL syntax, for instance) shrinks the range of malicious payloads that ever reach deeper application logic, functioning as one useful layer of defense. However, it's not sufficient alone \u2014 a determined attacker can often craft input that's syntactically 'valid' by a loose validation rule but still dangerous, which is why output encoding and parameterized queries remain necessary as the primary defenses for injection specifically. Client-side-only validation is also insufficient since it's trivially bypassed by directly calling the API.",
     "references": [
       "OWASP: Input Validation Cheat Sheet"
     ],
@@ -1127,7 +1127,7 @@
       "Use throttling for both, since they're both high-frequency events"
     ],
     "correctIndex": 1,
-    "explanation": "Debouncing collapses a burst of rapid calls into a single call after activity settles down, which fits the search box perfectly since only the user's final, settled query is worth sending. Throttling instead guarantees the function runs at a regular maximum rate throughout continuous activity, which fits the scroll handler since you need the header's position to keep updating smoothly as the user scrolls, not just once scrolling stops. They solve genuinely different problems (option C is false \u2014 neither strictly dominates the other), and this optimization is not automatic (option D is false); both must be implemented deliberately.",
+    "explanation": "Debouncing collapses a burst of rapid calls into a single call after activity settles down, which fits the search box perfectly since only the user's final, settled query is worth sending. Throttling instead guarantees the function runs at a regular maximum rate throughout continuous activity, which fits the scroll handler since you need the header's position to keep updating smoothly as the user scrolls, not just once scrolling stops. They solve genuinely different problems (neither strictly dominates the other), and this optimization is not automatic; both must be implemented deliberately.",
     "teachMePrompt": "I just learned debouncing waits for a pause before firing (good for search-as-you-type) while throttling enforces a steady maximum rate during continuous activity (good for scroll handlers). Teach me the full mental model behind it \u2014 how to actually implement both from scratch using closures and `setTimeout` (or `requestAnimationFrame` for throttling tied to rendering), the 'leading vs trailing edge' variations of debounce (fire immediately then ignore, vs wait then fire once), and other classic use cases for each (resize handlers, button double-click prevention, infinite scroll triggers). Don't just contrast the two concepts \u2014 show me how to implement them and their edge-timing variants.",
     "doubleCheckPrompt": "Is it accurate that a 'leading edge' debounce fires the function immediately on the first call and then ignores subsequent calls until the pause period elapses, which is the opposite timing of the more common 'trailing edge' debounce? Cite sources.",
     "references": [
@@ -1147,7 +1147,7 @@
       "Memoization \u2014 caching the function's return value keyed by its input arguments, so repeated calls with the same input return the cached result instantly instead of recomputing; this only works safely because the function is pure (same input always produces the same output, with no side effects), which guarantees a cached result is always still correct to reuse"
     ],
     "correctIndex": 3,
-    "explanation": "Memoization is exactly the right tool for a pure function called repeatedly with overlapping inputs \u2014 wrapping it to store `input -> output` pairs in a cache (often a `Map`) lets repeated calls skip recomputation entirely, and purity is what makes this safe, since an impure function's output could legitimately differ between calls with identical input, making a cached result stale or wrong. HTTP caching (option B) is a network-layer concept unrelated to in-process function calls, debouncing (option C) solves a completely different problem (call frequency, not repeated identical work), and option D is simply false.",
+    "explanation": "Memoization is exactly the right tool for a pure function called repeatedly with overlapping inputs \u2014 wrapping it to store `input -> output` pairs in a cache (often a `Map`) lets repeated calls skip recomputation entirely, and purity is what makes this safe, since an impure function's output could legitimately differ between calls with identical input, making a cached result stale or wrong. HTTP caching is a network-layer concept unrelated to in-process function calls, debouncing solves a completely different problem (call frequency, not repeated identical work), and the claim that plain functions can't avoid recomputation is simply false.",
     "teachMePrompt": "I just learned memoization caches a pure function's output by its input arguments, and purity is what makes caching safe since impure functions could legitimately return different results for the same input. Teach me the full mental model behind it \u2014 how to implement a generic `memoize()` higher-order function using a `Map` for the cache, why memoization can itself become a memory leak if the cache grows unbounded (and strategies like LRU eviction or `WeakMap` keys to address that), and how memoization relates to dynamic programming's caching of subproblem results in algorithms. Don't just define memoization \u2014 show me the implementation and the unbounded-cache-growth pitfall.",
     "doubleCheckPrompt": "Is it accurate that memoizing a function with side effects (an impure function) can produce incorrect results, since a cached output might not reflect what a fresh call would actually return? Cite sources.",
     "references": [
@@ -1166,7 +1166,7 @@
       "Lazy loading images \u2014 deferring the actual loading of an image until it's about to enter the viewport (natively via the `loading=\"lazy\"` attribute, or via the `IntersectionObserver` API for more control), so initial page load only fetches what's immediately visible, with the rest loaded on demand as the user scrolls"
     ],
     "correctIndex": 3,
-    "explanation": "Lazy loading directly targets exactly this problem: images outside the initial viewport are deferred until they're actually needed, which can be done with a single native HTML attribute (`loading=\"lazy\"`) for simple cases or `IntersectionObserver` for more customized loading behavior (like triggering a bit before the image enters view). Debouncing (option B) doesn't apply to static image tags at all. Inlining every image as a data URI (option C) would bloat the initial HTML document itself with all that image data upfront, working against the goal rather than helping it. Option D is false \u2014 native lazy loading is a well-supported standard feature specifically built to defer image loads.",
+    "explanation": "Lazy loading directly targets exactly this problem: images outside the initial viewport are deferred until they're actually needed, which can be done with a single native HTML attribute (`loading=\"lazy\"`) for simple cases or `IntersectionObserver` for more customized loading behavior (like triggering a bit before the image enters view). Debouncing doesn't apply to static image tags at all. Inlining every image as a data URI would bloat the initial HTML document itself with all that image data upfront, working against the goal rather than helping it. Claiming image loading can't be deferred is false \u2014 native lazy loading is a well-supported standard feature specifically built to defer image loads.",
     "teachMePrompt": "I just learned lazy loading defers offscreen images until they approach the viewport, using either the native `loading=\"lazy\"` attribute or IntersectionObserver for more control. Teach me the full mental model behind it \u2014 how `IntersectionObserver` actually works under the hood (observing when an element crosses a viewport threshold, more efficient than old scroll-event-based lazy-loading hacks), when native `loading=\"lazy\"` is sufficient versus when you'd need IntersectionObserver's extra control (like a custom loading margin or fade-in trigger), and how lazy loading extends beyond images to other patterns like code-splitting/lazy-loaded JS modules and infinite scroll. Don't just confirm the fix \u2014 show me how IntersectionObserver works and where lazy loading applies beyond images.",
     "doubleCheckPrompt": "Is it accurate that `IntersectionObserver` is generally considered more performant than older scroll-event-listener-based techniques for detecting when an element enters the viewport, since it doesn't require running a handler on every single scroll event? Cite sources.",
     "references": [
@@ -1186,7 +1186,7 @@
       "Batch all your DOM reads first, then batch all your DOM writes together afterward (avoiding interleaving them), and/or apply multiple style changes at once by toggling a single CSS class rather than setting individual `.style` properties one at a time \u2014 both minimize how often the browser needs to recalculate layout"
     ],
     "correctIndex": 3,
-    "explanation": "Interleaving reads (like `.offsetHeight`, which forces the browser to flush any pending layout changes to answer accurately) with writes forces repeated synchronous reflows, known as 'layout thrashing' \u2014 batching all reads together and all writes together avoids this back-and-forth. Toggling one class to apply several style changes at once also reduces the number of separate style-recalculation triggers compared to setting many individual `.style` properties sequentially. `!important` (option D) affects CSS specificity only, with no bearing on the reflow/repaint mechanism.",
+    "explanation": "Interleaving reads (like `.offsetHeight`, which forces the browser to flush any pending layout changes to answer accurately) with writes forces repeated synchronous reflows, known as 'layout thrashing' \u2014 batching all reads together and all writes together avoids this back-and-forth. Toggling one class to apply several style changes at once also reduces the number of separate style-recalculation triggers compared to setting many individual `.style` properties sequentially. `!important` affects CSS specificity only, with no bearing on the reflow/repaint mechanism.",
     "references": [
       "MDN: Reflow"
     ],
@@ -1205,7 +1205,7 @@
       "They allow direct, synchronous DOM manipulation from a background thread"
     ],
     "correctIndex": 2,
-    "explanation": "Web Workers run JS in a genuinely separate thread, which is the actual solution to the single-threaded main-thread-blocking problem: heavy computation moved to a worker no longer freezes scrolling, animations, or input handling on the main thread while it runs. The tradeoff is that workers have no direct DOM access (contradicting option D) and can only exchange data with the main thread via asynchronous message passing (`postMessage`/`onmessage`), which is a deliberate isolation boundary, not a limitation to work around.",
+    "explanation": "Web Workers run JS in a genuinely separate thread, which is the actual solution to the single-threaded main-thread-blocking problem: heavy computation moved to a worker no longer freezes scrolling, animations, or input handling on the main thread while it runs. The tradeoff is that workers have no direct DOM access and can only exchange data with the main thread via asynchronous message passing (`postMessage`/`onmessage`), which is a deliberate isolation boundary, not a limitation to work around.",
     "references": [
       "MDN: Web Workers API"
     ],
@@ -1224,7 +1224,7 @@
       "They are functionally and syntactically identical, just with different keyword names"
     ],
     "correctIndex": 1,
-    "explanation": "CommonJS's `require()` is a synchronous function call that can technically appear anywhere in code (even conditionally), which makes static analysis (and therefore tree shaking) harder, while ESM's `import`/`export` must appear at the top level of a module, which is precisely what lets bundlers statically determine the full dependency graph and safely eliminate unused exports. CommonJS was Node's original module system but browsers never natively supported it, while ESM is now natively supported in both modern browsers and current Node.js versions \u2014 contradicting option B's flipped claim. ES Modules fully support multiple named exports per file (contradicting option D).",
+    "explanation": "CommonJS's `require()` is a synchronous function call that can technically appear anywhere in code (even conditionally), which makes static analysis (and therefore tree shaking) harder, while ESM's `import`/`export` must appear at the top level of a module, which is precisely what lets bundlers statically determine the full dependency graph and safely eliminate unused exports. CommonJS was Node's original module system but browsers never natively supported it, while ESM is now natively supported in both modern browsers and current Node.js versions \u2014 contradicting the flipped claim that CommonJS is browser-only and ES Modules are Node-only. ES Modules fully support multiple named exports per file.",
     "references": [
       "MDN: JavaScript modules"
     ],
@@ -1243,7 +1243,7 @@
       "It compresses variable and function names to shorter versions to reduce file size (this is minification, a separate step)"
     ],
     "correctIndex": 2,
-    "explanation": "Tree shaking is specifically about dead-code elimination based on the static import/export graph \u2014 if a function is exported from a module but nothing in the app ever imports and uses it, tree shaking omits it from the final bundle. This is a distinct process from minification (option A, shrinking identifier names) and comment/whitespace stripping (option C), both of which are separate build steps commonly performed alongside tree shaking but conceptually different.",
+    "explanation": "Tree shaking is specifically about dead-code elimination based on the static import/export graph \u2014 if a function is exported from a module but nothing in the app ever imports and uses it, tree shaking omits it from the final bundle. This is a distinct process from minification (shrinking identifier names) and comment/whitespace stripping, both of which are separate build steps commonly performed alongside tree shaking but conceptually different.",
     "references": [
       "MDN: Tree shaking"
     ],
@@ -1262,7 +1262,7 @@
       "Bundlers exist purely to add build time to a project with no functional benefit"
     ],
     "correctIndex": 2,
-    "explanation": "Beyond simple concatenation, a bundler resolves the full `import`/`require` graph automatically so developers don't have to manually manage script-tag load order, applies optimizations like tree shaking (removing unused exports) and code-splitting (breaking output into smaller chunks loaded on demand), and commonly serves as the integration point for transpiling non-standard syntax (JSX, TypeScript) and processing other asset types into browser-ready output. This is primarily a frontend/browser-facing concern historically (contradicting option C), since browsers needed a way to consume the module ecosystem that Node's `require()` didn't natively support.",
+    "explanation": "Beyond simple concatenation, a bundler resolves the full `import`/`require` graph automatically so developers don't have to manually manage script-tag load order, applies optimizations like tree shaking (removing unused exports) and code-splitting (breaking output into smaller chunks loaded on demand), and commonly serves as the integration point for transpiling non-standard syntax (JSX, TypeScript) and processing other asset types into browser-ready output. This is primarily a frontend/browser-facing concern historically, since browsers needed a way to consume the module ecosystem that Node's `require()` didn't natively support.",
     "references": [
       "MDN: Client-side tooling overview"
     ],
@@ -1281,7 +1281,7 @@
       "TypeScript eliminates the need for testing entirely, since type-checking replaces it"
     ],
     "correctIndex": 0,
-    "explanation": "TypeScript's primary value is compile-time type checking and better tooling (autocomplete, safer refactors, self-documenting function signatures), catching a category of bugs (like passing a string where a number was expected) before code ever runs, but it introduces its own costs: a mandatory compile step, a learning curve around the type system, and friction when types genuinely are complex or dynamic. Since TypeScript compiles down to plain JavaScript, there's no runtime performance difference (contradicting option A), it doesn't replace the need for tests since type-checking can't catch logic errors or runtime-only issues (contradicting option C), and it's fully usable with any JS environment or framework, not React-exclusive (contradicting option D).",
+    "explanation": "TypeScript's primary value is compile-time type checking and better tooling (autocomplete, safer refactors, self-documenting function signatures), catching a category of bugs (like passing a string where a number was expected) before code ever runs, but it introduces its own costs: a mandatory compile step, a learning curve around the type system, and friction when types genuinely are complex or dynamic. Since TypeScript compiles down to plain JavaScript, there's no runtime performance difference, it doesn't replace the need for tests since type-checking can't catch logic errors or runtime-only issues, and it's fully usable with any JS environment or framework, not React-exclusive.",
     "references": [
       "TypeScript Handbook"
     ],
@@ -1319,7 +1319,7 @@
       "It makes all arrays in the program permanently immutable"
     ],
     "correctIndex": 2,
-    "explanation": "Modifying a shared built-in prototype is genuinely possible (contradicting option A) but risky precisely because it's global and invisible \u2014 every array everywhere in the program (including inside third-party libraries you don't control) gains that extra method, creating collision risk with future spec additions and confusing anyone unfamiliar with the customization, since it violates the reasonable assumption that built-ins behave exactly as documented. This is a maintainability and collision-risk problem more than a narrow performance issue (contradicting option D), and has nothing to do with immutability (option C).",
+    "explanation": "Modifying a shared built-in prototype is genuinely possible but risky precisely because it's global and invisible \u2014 every array everywhere in the program (including inside third-party libraries you don't control) gains that extra method, creating collision risk with future spec additions and confusing anyone unfamiliar with the customization, since it violates the reasonable assumption that built-ins behave exactly as documented. This is a maintainability and collision-risk problem more than a narrow performance issue, and has nothing to do with immutability.",
     "references": [
       "MDN: Inheritance and the prototype chain"
     ],
@@ -1338,7 +1338,7 @@
       "A required top-level object literal every module must export, called `metadata`"
     ],
     "correctIndex": 2,
-    "explanation": "`import.meta` is the standard mechanism giving a module access to metadata about itself at runtime \u2014 most universally, `import.meta.url`, which tells the module its own resolved URL (useful for resolving relative paths to assets), with build tools like Vite extending this object further (e.g. `import.meta.env` for environment variables). This is a language/tooling-level runtime feature, not a documentation artifact (option C) or a required export convention (option D, which is fabricated).",
+    "explanation": "`import.meta` is the standard mechanism giving a module access to metadata about itself at runtime \u2014 most universally, `import.meta.url`, which tells the module its own resolved URL (useful for resolving relative paths to assets), with build tools like Vite extending this object further (e.g. `import.meta.env` for environment variables). This is a language/tooling-level runtime feature, not a documentation artifact or a required export convention (which is fabricated).",
     "references": [
       "MDN: import.meta"
     ],
