@@ -14,11 +14,16 @@
 //     "(option 2)"). The UI never shows letters and options get reordered,
 //     so these are always wrong. These fail the check (exit code 1).
 //
-// The longest-answer tell is a warning, not a failure: the existing bank
-// still has it, and fixing it means rewriting distractors.
+//   - wording cues (scripts/surface-cues.mjs): punctuation, "since…"
+//     clauses, parentheticals, absolute words — any feature far more common
+//     on correct options than wrong ones (or vice versa).
+//
+// The longest-answer tell and wording cues are warnings, not failures:
+// fixing them means rewriting options, which needs judgment and review.
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { questionFiles, readQuestions } from "./questionFile.mjs";
+import { cueStats, flaggedCues } from "./surface-cues.mjs";
 
 // Correct option counts as "clearly longest" when it is at least this much
 // longer than the longest wrong option. Length ties or near-ties aren't a tell.
@@ -54,7 +59,7 @@ function pct(n, total) {
 }
 
 // CLI — only when run directly, not when imported by rebalance-positions.mjs.
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   const list = args.includes("--list");
   const paths = args.filter((a) => !a.startsWith("--"));
@@ -73,6 +78,12 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       `  longest-answer tell:  ${r.lengthTells.length}/${r.total} (${pct(r.lengthTells.length, r.total)})`,
     );
     console.log(`  option references:    ${r.optionReferences.length}`);
+    const questions = readQuestions(file);
+    const cues = cueStats(questions);
+    const flagged = flaggedCues(cues, questions.length);
+    console.log(
+      `  wording cues:         ${flagged.length ? flagged.map((n) => `${n} (${cues[n].giveaways.length} give away the answer)`).join(", ") : "none flagged"}`,
+    );
     if (list && r.lengthTells.length) console.log(`    tells: ${r.lengthTells.join(", ")}`);
     if (r.optionReferences.length) {
       console.log(`    FAIL — explanations refer to options by letter/number: ${r.optionReferences.join(", ")}`);
