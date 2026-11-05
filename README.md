@@ -57,4 +57,4 @@ Node 20+. No environment variables needed: progress lives in `localStorage`.
 ## Make it yours
 
 - **Questions:** add `data/questions/<topic>.json` (schema in [`types/question.ts`](types/question.ts)) and register it in [`lib/questionPool.ts`](lib/questionPool.ts), or generate a set with `/discuss`, `/generate` and `/merge` in Claude Code. Check any bank with `node scripts/check-bias.mjs`.
-- **Deploy:** import the repo into [Vercel](https://vercel.com/new). For the optional backup, see [`.env.example`](.env.example).
+- **Deploy:** import the repo into [Vercel](https://vercel.com/new). No environment variables needed. For the optional progress backup, connect a Vercel Blob store (this sets `BLOB_READ_WRITE_TOKEN` for you), add a `BACKUP_SECRET`, then open `/?backup=<secret>` once on each device. Details in [`.env.example`](.env.example).
