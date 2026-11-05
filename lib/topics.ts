@@ -16,8 +16,15 @@ export function getTopicSummaries(pool: Question[]): TopicSummary[] {
     .sort((a, b) => a.topic.localeCompare(b.topic));
 }
 
-/** Naive title-case (e.g. "backend-engineering" -> "Backend Engineering"); no override table for cases like "JavaScript". */
+/** Display names that naive title-casing gets wrong. */
+const TOPIC_NAMES: Record<string, string> = {
+  javascript: "JavaScript",
+  ccaf: "CCAF",
+};
+
+/** Title-case a topic slug (e.g. "backend-engineering" -> "Backend Engineering"), with overrides for names like "JavaScript". */
 export function humanizeTopic(topic: string): string {
+  if (TOPIC_NAMES[topic]) return TOPIC_NAMES[topic];
   return topic
     .split("-")
     .map((word) => (word.length > 0 ? word[0].toUpperCase() + word.slice(1) : word))

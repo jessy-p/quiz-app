@@ -1,5 +1,7 @@
 "use client";
 
+import { InlineCode } from "./InlineCode";
+
 export type OptionVariant =
   | "rest"
   | "correct-selected"
@@ -50,8 +52,14 @@ export function OptionRow({ label, variant, checked, onClick }: OptionRowProps) 
       onKeyDown={handleKeyDown}
       className={`flex min-h-[52px] w-full items-center justify-between rounded-[10px] px-4 py-[13px] font-sans text-[14px] leading-[1.4] motion-safe:transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber focus-visible:outline-offset-2 ${onClick ? "cursor-pointer" : "cursor-default"} ${VARIANT_CLASSES[variant]}`}
     >
-      <span>{label}</span>
-      {GLYPH[variant] && <span aria-hidden="true">{GLYPH[variant]}</span>}
+      <span>
+        <InlineCode text={label} />
+      </span>
+      {GLYPH[variant] && (
+        <span aria-hidden="true" className="ml-3 shrink-0">
+          {GLYPH[variant]}
+        </span>
+      )}
     </div>
   );
 }

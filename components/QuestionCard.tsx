@@ -1,5 +1,7 @@
 "use client";
 
+import { InlineCode } from "./InlineCode";
+
 import type { Question } from "@/types/question";
 import { OptionRow, type OptionVariant } from "./OptionRow";
 
@@ -59,7 +61,7 @@ export function QuestionCard({
       />
 
       <p className="font-serif text-[20px] leading-[1.5] font-normal text-ink">
-        {question.prompt}
+        <InlineCode text={question.prompt} />
       </p>
 
       <div
@@ -86,7 +88,7 @@ export function QuestionCard({
               : `Incorrect. You chose ${question.options[selectedIndex]}. Correct answer: ${question.options[question.correctIndex]}.`}
           </div>
           <div className="mt-4 w-full border-t border-ink-82/10 pt-4 text-[13px] leading-[1.55] text-ink-60">
-            {question.explanation}
+            <InlineCode text={question.explanation} />
           </div>
         </>
       )}

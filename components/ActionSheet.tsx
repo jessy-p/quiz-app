@@ -1,5 +1,7 @@
 "use client";
 
+import { InlineCode } from "./InlineCode";
+
 import { useEffect, useRef, useState } from "react";
 import type { Question } from "@/types/question";
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/bodyScrollLock";
@@ -63,7 +65,9 @@ function SheetContent({
   if (variant === "teach-me") {
     return (
       <div className="flex flex-col gap-4">
-        <p className="font-sans text-[13px] leading-[1.55] text-ink-60">{question.explanation}</p>
+        <p className="font-sans text-[13px] leading-[1.55] text-ink-60">
+          <InlineCode text={question.explanation} />
+        </p>
         <div className={PROMPT_BLOCK_CLASSES}>{question.teachMePrompt}</div>
         <button
           type="button"
